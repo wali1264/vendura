@@ -301,30 +301,38 @@ export const api = {
             const customer = await db.getById<Customer>(db.STORES.CUSTOMERS, cu.id);
             if (customer) await db.putItem(db.STORES.CUSTOMERS, { ...customer, balanceAFN: cu.newBalances.AFN, balanceUSD: cu.newBalances.USD, balanceIRT: cu.newBalances.IRT, balance: cu.newBalances.Total });
         }
-        if (transaction.customerId) {
+        if (transaction && transaction.customerId) {
             const txs = await db.getAll<CustomerTransaction>(db.STORES.CUSTOMER_TX);
             const existingTx = txs.find(t => t.invoiceId === invoiceId);
             if (existingTx) {
                 Object.assign(existingTx, { amount: transaction.amount, date: transaction.date, currency: transaction.currency, customerId: transaction.customerId });
                 await db.putItem(db.STORES.CUSTOMER_TX, existingTx);
             } else await db.putItem(db.STORES.CUSTOMER_TX, transaction);
+        } else {
+            const txs = await db.getAll<CustomerTransaction>(db.STORES.CUSTOMER_TX);
+            const existingTx = txs.find(t => t.invoiceId === invoiceId);
+            if (existingTx) await db.deleteItem(db.STORES.CUSTOMER_TX, existingTx.id);
         }
 
         for (const su of supplierUpdates) {
             const supplier = await db.getById<Supplier>(db.STORES.SUPPLIERS, su.id);
             if (supplier) await db.putItem(db.STORES.SUPPLIERS, { ...supplier, balanceAFN: su.newBalances.AFN, balanceUSD: su.newBalances.USD, balanceIRT: su.newBalances.IRT, balance: su.newBalances.Total });
         }
-        if (supplierTransaction) {
+        if (supplierTransaction && supplierTransaction.supplierId) {
             const txs = await db.getAll<SupplierTransaction>(db.STORES.SUPPLIER_TX);
             const existingTx = txs.find(t => t.invoiceId === invoiceId);
             if (existingTx) {
                 Object.assign(existingTx, { amount: supplierTransaction.amount, date: supplierTransaction.date, currency: supplierTransaction.currency, supplierId: supplierTransaction.supplierId });
                 await db.putItem(db.STORES.SUPPLIER_TX, existingTx);
             } else await db.putItem(db.STORES.SUPPLIER_TX, supplierTransaction);
+        } else {
+            const txs = await db.getAll<SupplierTransaction>(db.STORES.SUPPLIER_TX);
+            const existingTx = txs.find(t => t.invoiceId === invoiceId);
+            if (existingTx) await db.deleteItem(db.STORES.SUPPLIER_TX, existingTx.id);
         }
     },
 
-    createSaleReturn: async (returnInvoice: SaleInvoice, stockRestores: {batchId: string, quantity: number}[], customerRefund?: {id: string, amount: number, currency: 'AFN'|'USD'|'IRT', newBalances: any}) => {
+    createSaleReturn: async (returnInvoice: SaleInvoice, stockRestores: {batchId: string, quantity: number}[], customerRefund?: {id: string, amount: number, currency: 'AFN'|'USD'|'IRT', newBalances: any}, supplierRefund?: {id: string, amount: number, currency: 'AFN'|'USD'|'IRT', newBalances: any}) => {
         await db.putItem(db.STORES.SALE_INVOICES, returnInvoice);
         for (const restore of stockRestores) {
             const product = await findProductByBatchId(restore.batchId);
@@ -339,6 +347,14 @@ export const api = {
                 await db.putItem(db.STORES.CUSTOMERS, { ...customer, balanceAFN: customerRefund.newBalances.AFN, balanceUSD: customerRefund.newBalances.USD, balanceIRT: customerRefund.newBalances.IRT, balance: customerRefund.newBalances.Total });
                 const returnTx: CustomerTransaction = { id: crypto.randomUUID(), customerId: customerRefund.id, type: 'sale_return', amount: customerRefund.amount, date: returnInvoice.timestamp, description: `مرجوعی فاکتور #${returnInvoice.originalInvoiceId}`, invoiceId: returnInvoice.id, currency: customerRefund.currency };
                 await db.putItem(db.STORES.CUSTOMER_TX, returnTx);
+            }
+        }
+        if (supplierRefund) {
+            const supplier = await db.getById<Supplier>(db.STORES.SUPPLIERS, supplierRefund.id);
+            if (supplier) {
+                await db.putItem(db.STORES.SUPPLIERS, { ...supplier, balanceAFN: supplierRefund.newBalances.AFN, balanceUSD: supplierRefund.newBalances.USD, balanceIRT: supplierRefund.newBalances.IRT, balance: supplierRefund.newBalances.Total });
+                const returnTx: SupplierTransaction = { id: crypto.randomUUID(), supplierId: supplierRefund.id, type: 'purchase', amount: supplierRefund.amount, date: returnInvoice.timestamp, description: `مرجوعی فروش کالا (واسطه) - فاکتور #${returnInvoice.originalInvoiceId}`, invoiceId: returnInvoice.id, currency: supplierRefund.currency };
+                await db.putItem(db.STORES.SUPPLIER_TX, returnTx);
             }
         }
     },

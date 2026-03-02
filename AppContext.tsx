@@ -833,8 +833,27 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
         }
 
+        let supplierRefund = undefined;
+        if (originalInv.supplierIntermediaryId) {
+            const supplier = state.suppliers.find(s => s.id === originalInv.supplierIntermediaryId);
+            if (supplier) {
+                const newBalances = { ...supplier };
+                if (originalInv.currency === 'USD') newBalances.balanceUSD += returnTotalTransactional;
+                else if (originalInv.currency === 'IRT') newBalances.balanceIRT += returnTotalTransactional;
+                else newBalances.balanceAFN += returnTotalTransactional;
+                newBalances.balance += returnTotalAFN;
+
+                supplierRefund = {
+                    id: originalInv.supplierIntermediaryId,
+                    amount: returnTotalTransactional,
+                    currency: originalInv.currency,
+                    newBalances: { AFN: newBalances.balanceAFN, USD: newBalances.balanceUSD, IRT: newBalances.balanceIRT, Total: newBalances.balance }
+                };
+            }
+        }
+
         try {
-            await api.createSaleReturn(returnInv, stockRestores, customerRefund);
+            await api.createSaleReturn(returnInv, stockRestores, customerRefund, supplierRefund);
             await fetchData(true);
             logActivity('sale', `ثبت مرجوعی فروش: فاکتور ${returnId} (مرجع: ${originalInvoiceId})`, returnId, 'saleInvoice');
             return { success: true, message: "مرجوعی با موفقیت ثبت و انبار بروزرسانی شد." };
