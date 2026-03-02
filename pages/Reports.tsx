@@ -180,11 +180,11 @@ const Reports: React.FC = () => {
         
         // Segregate deposits into assets (when they owe us - Besan-kari) and liabilities (when we owe them - Amanat)
         const depositAssets = depositHolders.reduce((s, h) => {
-            const baseBalance = h.balance || h.balanceAFN; // Fallback for legacy data
+            const baseBalance = h.balance !== undefined ? h.balance : h.balanceAFN; // Fallback for legacy data
             return s + (baseBalance < 0 ? Math.abs(baseBalance) : 0);
         }, 0);
         const depositLiabilities = depositHolders.reduce((s, h) => {
-            const baseBalance = h.balance || h.balanceAFN;
+            const baseBalance = h.balance !== undefined ? h.balance : h.balanceAFN;
             return s + (baseBalance > 0 ? baseBalance : 0);
         }, 0);
         
