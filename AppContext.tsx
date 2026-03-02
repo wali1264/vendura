@@ -1425,7 +1425,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         else if (c === 'IRT') newH.balanceIRT += factor * a; 
         else newH.balanceAFN += factor * a;
         
-        newH.balance = (newH.balance || 0) + (factor * baseAmount);
+        newH.balance = (newH.balance !== undefined ? newH.balance : 0) + (factor * baseAmount);
 
         await api.updateDepositHolder(newH);
         await api.addDepositTransaction(tx);
