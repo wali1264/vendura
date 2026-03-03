@@ -19,13 +19,14 @@ const DEFAULT_ADMIN_ROLE: Role = {
     id: 'admin-role',
     name: 'Admin',
     permissions: [
-        'page:dashboard', 'page:inventory', 'page:pos', 'page:purchases', 'page:accounting', 'page:reports', 'page:settings', 'page:in_transit', 'page:deposits',
+        'page:dashboard', 'page:inventory', 'page:pos', 'page:purchases', 'page:accounting', 'page:reports', 'page:settings', 'page:in_transit', 'page:deposits', 'page:orders',
         'inventory:add_product', 'inventory:edit_product', 'inventory:delete_product',
         'pos:create_invoice', 'pos:edit_invoice', 'pos:apply_discount', 'pos:create_credit_sale',
         'purchase:create_invoice', 'purchase:edit_invoice',
         'in_transit:confirm_receipt',
         'accounting:manage_suppliers', 'accounting:manage_customers', 'accounting:manage_payroll', 'accounting:manage_expenses', 'accounting:manage_deposits',
-        'settings:manage_store', 'settings:manage_users', 'settings:manage_backup', 'settings:manage_services', 'settings:manage_alerts'
+        'settings:manage_store', 'settings:manage_users', 'settings:manage_backup', 'settings:manage_services', 'settings:manage_alerts',
+        'orders:create', 'orders:edit', 'orders:delete', 'orders:add_payment'
     ]
 };
 
@@ -247,6 +248,15 @@ export const api = {
         return records.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     },
     addWastageRecord: async (record: any) => db.putItem(db.STORES.WASTAGE_RECORDS, record),
+
+    // --- Orders ---
+    getOrders: async () => {
+        const records = await db.getAll<any>(db.STORES.ORDERS);
+        return records.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    },
+    addOrder: async (order: any) => db.putItem(db.STORES.ORDERS, order),
+    updateOrder: async (order: any) => db.putItem(db.STORES.ORDERS, order),
+    deleteOrder: async (id: string) => db.deleteItem(db.STORES.ORDERS, id),
 
     createSale: async (
         invoice: SaleInvoice, 

@@ -111,6 +111,27 @@ export interface WastageRecord {
   user: string;
 }
 
+// --- Orders Module Types (Isolated) ---
+export type OrderStatus = 'pending' | 'ready' | 'delivered' | 'cancelled';
+
+export interface OrderPayment {
+    id: string;
+    amount: number;
+    date: string;
+}
+
+export interface Order {
+    id: string;
+    customerId: string;
+    title: string;
+    description: string;
+    totalAmount: number;
+    currency: 'AFN' | 'USD' | 'IRT';
+    status: OrderStatus;
+    payments: OrderPayment[];
+    createdAt: string;
+}
+
 // --- Security Deposit Module Types ---
 export interface DepositHolder {
     id: string;
@@ -298,6 +319,7 @@ export interface AppState {
     payrollTransactions: PayrollTransaction[];
     activities: ActivityLog[];
     wastageRecords: WastageRecord[];
+    orders: Order[];
     saleInvoiceCounter: number;
     editingSaleInvoiceId: string | null;
     editingPurchaseInvoiceId: string | null;

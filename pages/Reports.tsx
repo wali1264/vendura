@@ -191,7 +191,7 @@ const Reports: React.FC = () => {
         const totalWastage = (wastageRecords || []).reduce((sum, w) => sum + w.totalCost, 0);
 
         const totalAssets = invVal + cashPosition + custRec + depositAssets + deferredAssets;
-        const totalLiabilities = suppPay + depositLiabilities + totalWastage;
+        const totalLiabilities = suppPay + depositLiabilities;
         const netWorthRaw = totalAssets - totalLiabilities;
 
         return { 
@@ -733,12 +733,33 @@ const Reports: React.FC = () => {
             case 'wastage':
                 const filteredWastage = (wastageRecords || []).filter(w => {
                     const t = new Date(w.timestamp).getTime();
-                    return t >= dateRange.start.getTime() && t <= dateRange.end.getTime();
+                    const inDateRange = t >= dateRange.start.getTime() && t <= dateRange.end.getTime();
+                    const matchesProduct = selectedProductId ? w.productId === selectedProductId : true;
+                    return inDateRange && matchesProduct;
                 });
                 const totalWastageCost = filteredWastage.reduce((sum, w) => sum + w.totalCost, 0);
                 
                 return (
                     <div className="space-y-6">
+                        {/* Product Filter */}
+                        <div className="flex bg-slate-50/80 p-4 rounded-3xl border border-slate-100 shadow-sm">
+                            <div className="relative w-full md:w-64">
+                                <select 
+                                    value={selectedProductId}
+                                    onChange={(e) => setSelectedProductId(e.target.value)}
+                                    className="w-full p-3 pr-10 bg-white rounded-xl border border-slate-200 text-sm font-bold shadow-sm focus:ring-4 focus:ring-blue-50 outline-none appearance-none"
+                                >
+                                    <option value="">همه محصولات</option>
+                                    {products.map(p => (
+                                        <option key={p.id} value={p.id}>{p.name}</option>
+                                    ))}
+                                </select>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                                    <SearchIcon className="w-4 h-4" />
+                                </div>
+                            </div>
+                        </div>
+
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <SmartStatCard title="تعداد کل ضایعات" value={filteredWastage.reduce((sum, w) => sum + w.quantity, 0).toString()} color="text-orange-600" icon={<ArchiveBoxXMarkIcon/>} />
                             <SmartStatCard title="ارزش کل ضایعات" value={formatCurrency(totalWastageCost, storeSettings)} color="text-red-600" icon={<AccountingIcon/>} />
