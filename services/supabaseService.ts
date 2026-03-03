@@ -242,6 +242,12 @@ export const api = {
     },
     addActivity: async (log: ActivityLog) => db.putItem(db.STORES.ACTIVITY, log),
 
+    getWastageRecords: async () => {
+        const records = await db.getAll<any>(db.STORES.WASTAGE_RECORDS);
+        return records.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    },
+    addWastageRecord: async (record: any) => db.putItem(db.STORES.WASTAGE_RECORDS, record),
+
     createSale: async (
         invoice: SaleInvoice, 
         stockUpdates: {batchId: string, newStock: number}[], 
@@ -481,6 +487,7 @@ export const api = {
         if (data.payrollTransactions) for (const t of data.payrollTransactions) await db.putItem(db.STORES.PAYROLL_TX, t);
         if (data.depositTransactions) for (const t of data.depositTransactions) await db.putItem(db.STORES.DEPOSIT_TRANSACTIONS, t);
         if (data.activities) for (const a of data.activities) await db.putItem(db.STORES.ACTIVITY, a);
+        if (data.wastageRecords) for (const w of data.wastageRecords) await db.putItem(db.STORES.WASTAGE_RECORDS, w);
         if (data.users) for (const u of data.users) await db.putItem(db.STORES.USERS, u);
         if (data.roles) for (const r of data.roles) await db.putItem(db.STORES.ROLES, r);
     }

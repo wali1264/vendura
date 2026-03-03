@@ -41,6 +41,7 @@ interface AppContextType extends AppState {
     addProduct: (product: Omit<Product, 'id' | 'batches'>, firstBatch: Omit<ProductBatch, 'id'>) => { success: boolean; message: string }; 
     updateProduct: (product: Product) => { success: boolean; message: string };
     deleteProduct: (productId: string) => void;
+    registerWastage: (productId: string, quantity: number, reason: string) => { success: boolean; message: string };
     
     // POS Actions
     addToCart: (itemToAdd: Product | Service, type: 'product' | 'service') => { success: boolean; message: string };
@@ -128,7 +129,7 @@ const getDefaultState = (): AppState => {
             expenseCategories: ['rent', 'utilities', 'supplies', 'salary', 'other']
         },
         cart: [], customerTransactions: [], supplierTransactions: [], payrollTransactions: [],
-        activities: [], saleInvoiceCounter: 0, editingSaleInvoiceId: null, editingPurchaseInvoiceId: null,
+        activities: [], wastageRecords: [], saleInvoiceCounter: 0, editingSaleInvoiceId: null, editingPurchaseInvoiceId: null,
         isAuthenticated: false, currentUser: null,
         users: [],
         roles: [],
@@ -164,7 +165,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const fetchData = useCallback(async (isSilent = false) => {
         if (!isSilent) setIsLoading(true);
         try {
-            const [settings, users, roles, products, services, entities, transactions, invoices, activity] = await Promise.all([
+            const [settings, users, roles, products, services, entities, transactions, invoices, activity, wastageRecords] = await Promise.all([
                 api.getSettings().catch(() => ({})),
                 api.getUsers().catch(() => []),
                 api.getRoles().catch(() => []),
@@ -173,7 +174,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 api.getEntities().catch(() => ({ customers: [], suppliers: [], employees: [], expenses: [], depositHolders: [] })),
                 api.getTransactions().catch(() => ({ customerTransactions: [], supplierTransactions: [], payrollTransactions: [], depositTransactions: [] })),
                 api.getInvoices().catch(() => ({ saleInvoices: [], purchaseInvoices: [], inTransitInvoices: [] })),
-                api.getActivities().catch(() => [])
+                api.getActivities().catch(() => []),
+                api.getWastageRecords().catch(() => [])
             ]);
 
             const isSessionLocked = localStorage.getItem('kasebyar_session_locked') === 'true';
@@ -247,6 +249,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     purchaseInvoices: invoices.purchaseInvoices,
                     inTransitInvoices: invoices.inTransitInvoices,
                     activities: activity,
+                    wastageRecords: wastageRecords,
                     isAuthenticated: isAuth,
                     currentUser: restoredUser
                 };
@@ -452,6 +455,79 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return { success: true, message: 'ویرایش شد.' }; 
     };
     const deleteProduct = (id: string) => { api.deleteProduct(id).then(() => setState(prev => ({ ...prev, products: prev.products.filter(p => p.id !== id) }))); };
+
+    const registerWastage = (productId: string, quantity: number, reason: string) => {
+        let success = false;
+        let message = '';
+
+        setState(prevState => {
+            const productIndex = prevState.products.findIndex(p => p.id === productId);
+            if (productIndex === -1) return prevState;
+
+            const product = prevState.products[productIndex];
+            const totalStock = product.batches.reduce((sum, b) => sum + b.stock, 0);
+
+            if (quantity > totalStock) {
+                message = 'مقدار ضایعات نمی‌تواند بیشتر از موجودی باشد.';
+                return prevState;
+            }
+
+            let remainingWastage = quantity;
+            let totalWastageCost = 0;
+            const updatedBatches = [...product.batches].sort((a, b) => new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime());
+
+            for (let i = 0; i < updatedBatches.length && remainingWastage > 0; i++) {
+                const batch = updatedBatches[i];
+                if (batch.stock > 0) {
+                    const deductAmount = Math.min(batch.stock, remainingWastage);
+                    batch.stock -= deductAmount;
+                    remainingWastage -= deductAmount;
+                    totalWastageCost += (deductAmount * batch.purchasePrice);
+                }
+            }
+
+            const updatedProduct = { ...product, batches: updatedBatches };
+            const updatedProducts = [...prevState.products];
+            updatedProducts[productIndex] = updatedProduct;
+
+            const newWastageRecord = {
+                id: Date.now().toString(),
+                productId: product.id,
+                productName: product.name,
+                quantity: quantity,
+                totalCost: totalWastageCost,
+                reason: reason,
+                timestamp: new Date().toISOString(),
+                user: prevState.currentUser?.username || 'System'
+            };
+
+            success = true;
+            message = 'ضایعات با موفقیت ثبت شد.';
+
+            api.updateProduct(updatedProduct);
+            api.addWastageRecord(newWastageRecord);
+            
+            const activityLog: ActivityLog = {
+                id: Date.now().toString(),
+                type: 'wastage',
+                description: `ثبت ${quantity} عدد ضایعات برای ${product.name}`,
+                timestamp: new Date().toISOString(),
+                user: prevState.currentUser?.username || 'System',
+                refId: newWastageRecord.id,
+                refType: 'wastageRecord'
+            };
+            api.addActivity(activityLog);
+
+            return {
+                ...prevState,
+                products: updatedProducts,
+                wastageRecords: [newWastageRecord, ...(prevState.wastageRecords || [])],
+                activities: [activityLog, ...prevState.activities]
+            };
+        });
+
+        return { success, message };
+    };
 
     const addToCart = (item: any, type: any) => {
         let success = true;
@@ -1447,7 +1523,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     return <AppContext.Provider value={{
         ...state, showToast, isLoading, isLoggingOut, isShopActive, login, signup, logout, hasPermission, addUser, updateUser, deleteUser, addRole, updateRole, deleteRole, exportData, importData,
         cloudBackup, cloudRestore, autoBackupEnabled, setAutoBackupEnabled,
-        addProduct, updateProduct, deleteProduct, addToCart, updateCartItemQuantity, updateCartItemFinalPrice, removeFromCart, completeSale,
+        addProduct, updateProduct, deleteProduct, registerWastage, addToCart, updateCartItemQuantity, updateCartItemFinalPrice, removeFromCart, completeSale,
         beginEditSale, cancelEditSale, addSaleReturn, addPurchaseInvoice, beginEditPurchase, cancelEditPurchase, updatePurchaseInvoice, addPurchaseReturn,
         addInTransitInvoice, updateInTransitInvoice, deleteInTransitInvoice, archiveInTransitInvoice, moveInTransitItems, addInTransitPayment,
         updateSettings, addService, deleteService, addSupplier, deleteSupplier, addSupplierPayment, addCustomer, deleteCustomer, addCustomerPayment,

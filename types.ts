@@ -92,12 +92,23 @@ export interface InTransitInvoice extends Omit<PurchaseInvoice, 'type'> {
 
 export interface ActivityLog {
   id: string;
-  type: 'sale' | 'purchase' | 'inventory' | 'login' | 'payroll' | 'deposit';
+  type: 'sale' | 'purchase' | 'inventory' | 'login' | 'payroll' | 'deposit' | 'wastage';
   description: string;
   timestamp: string;
   user: string;
   refId?: string; // ID of the related entity (invoice, product, etc.)
-  refType?: 'saleInvoice' | 'purchaseInvoice' | 'product' | 'depositHolder'; // To know what to look for
+  refType?: 'saleInvoice' | 'purchaseInvoice' | 'product' | 'depositHolder' | 'wastageRecord'; // To know what to look for
+}
+
+export interface WastageRecord {
+  id: string;
+  productId: string;
+  productName: string;
+  quantity: number;
+  totalCost: number; // Value of wastage based on purchase price
+  reason: string;
+  timestamp: string;
+  user: string;
 }
 
 // --- Security Deposit Module Types ---
@@ -286,6 +297,7 @@ export interface AppState {
     supplierTransactions: SupplierTransaction[];
     payrollTransactions: PayrollTransaction[];
     activities: ActivityLog[];
+    wastageRecords: WastageRecord[];
     saleInvoiceCounter: number;
     editingSaleInvoiceId: string | null;
     editingPurchaseInvoiceId: string | null;
