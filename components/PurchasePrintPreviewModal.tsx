@@ -53,7 +53,7 @@ const PurchasePrintPreviewModal: React.FC<PurchasePrintPreviewModalProps> = ({ i
                             <tbody>
                                 {invoice.items.map(item => (
                                     <tr key={item.productId + item.lotNumber} className="border-b last:border-0">
-                                        <td className="p-3 text-right font-semibold">{item.productName}</td>
+                                        <td className="p-3 text-right font-semibold print:text-[8px] print:leading-none print:whitespace-nowrap">{item.productName}</td>
                                         <td className="p-3 text-center">{item.quantity}</td>
                                         <td className="p-3 text-center" dir="ltr">{item.purchasePrice.toLocaleString('fa-IR', { maximumFractionDigits: 3 })} {currencySymbol}</td>
                                         <td className="p-3 text-left font-semibold" dir="ltr">{(item.quantity * item.purchasePrice).toLocaleString('fa-IR', { maximumFractionDigits: 3 })} {currencySymbol}</td>

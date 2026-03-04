@@ -131,8 +131,8 @@ const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ invoice, onClose 
                         <table className="min-w-full text-xs print:text-sm border-collapse">
                             <thead className="bg-slate-100 sticky top-0">
                                 <tr>
-                                    <th rowSpan={2} className="p-1 print:p-2 text-center font-bold border border-slate-400 w-6">#</th>
-                                    <th rowSpan={2} className="p-1 print:p-2 text-right font-bold border border-slate-400">شرح کالا</th>
+                                    <th rowSpan={2} className="p-1 print:p-2 text-center font-bold border border-slate-400 w-6 print:hidden">#</th>
+                                    <th rowSpan={2} className="p-1 print:p-2 text-right font-bold border border-slate-400 print:w-[50%]">شرح کالا</th>
                                     <th colSpan={2} className="p-1 print:p-2 text-center font-bold border border-slate-400 bg-blue-50 text-blue-900">تعداد</th>
                                     <th colSpan={2} className="p-1 print:p-2 text-center font-bold border border-slate-400">قیمت (فی - {invoice.currency})</th>
                                     <th rowSpan={2} className="p-1 print:p-2 text-center font-bold border border-slate-400 w-16">قیمت کل</th>
@@ -149,9 +149,9 @@ const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ invoice, onClose 
                                     const details = getItemDetails(item);
                                     return (
                                         <tr key={`${item.id}-${item.type}`} className="border-b border-slate-300">
-                                            <td className="p-1 print:p-2 text-center border border-slate-300 font-mono text-slate-500">{index + 1}</td>
+                                            <td className="p-1 print:p-2 text-center border border-slate-300 font-mono text-slate-500 print:hidden">{index + 1}</td>
                                             <td className="p-1 print:p-2 text-right border border-slate-300">
-                                                <p className="font-semibold text-slate-800">{item.name}</p>
+                                                <p className="font-semibold text-slate-800 print:text-[8px] print:leading-none print:whitespace-nowrap">{item.name}</p>
                                             </td>
                                             <td className="p-1 print:p-2 text-center border border-slate-300 font-bold bg-blue-50/30">{details.pkgCount > 0 ? details.pkgCount.toLocaleString('fa-IR') : '-'}</td>
                                             <td className="p-1 print:p-2 text-center border border-slate-300 font-bold bg-blue-50/30">{details.unitCount > 0 ? details.unitCount.toLocaleString('fa-IR') : '-'}</td>
