@@ -191,6 +191,8 @@ export interface Employee {
     basicSalary: number;
     otherBenefits: number;
     monthlySalary: number; // Total (Basic + Benefits)
+    salaryCurrency: 'AFN' | 'USD' | 'IRT'; // Base currency for salary
+    isActive: boolean;
     balance: number; // Total in base currency
     balanceAFN: number;
     balanceUSD: number;

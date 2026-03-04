@@ -30,12 +30,12 @@ const PurchasePrintPreviewModal: React.FC<PurchasePrintPreviewModalProps> = ({ i
                         <p className="text-sm text-slate-500">تلفن: {storeSettings.phone}</p>
                         <p className="text-md text-slate-600 mt-2 font-bold">فاکتور خرید</p>
                     </div>
-                    <div className="flex justify-between text-md mb-6">
-                        <div>
+                    <div className="flex flex-wrap justify-between gap-2 text-md mb-6 bg-slate-50 p-3 rounded-lg border">
+                        <div className="w-full md:w-1/2">
                             <p><strong>شماره فاکتور:</strong> <span className="font-mono">{invoice.invoiceNumber || invoice.id}</span></p>
                             <p><strong>تأمین کننده:</strong> {supplier?.name || 'تأمین کننده حذف شده'}</p>
                         </div>
-                        <div className="text-left">
+                        <div className="text-left w-full md:w-auto">
                             <p><strong>تاریخ:</strong> {new Date(invoice.timestamp).toLocaleDateString('fa-IR')}</p>
                             <p><strong>ساعت:</strong> {new Date(invoice.timestamp).toLocaleTimeString('fa-IR')}</p>
                         </div>

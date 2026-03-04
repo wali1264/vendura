@@ -95,10 +95,14 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
                     const curSuffix = currency === 'USD' ? '$' : (currency === 'IRT' ? 'ت' : '');
                     
                     if (type === 'supplier') {
-                        if (t.type === 'purchase') debit = t.amount;
-                        else if (t.type === 'payment' || t.type === 'purchase_return') credit = t.amount;
+                        // خرید باعث بستانکار شدن تأمین‌کننده می‌شود (بدهی ما زیاد می‌شود)
+                        if (t.type === 'purchase') credit = t.amount;
+                        // پرداخت به او یا فروش به او باعث بدهکار شدن او می‌شود (بدهی ما کم می‌شود یا او بدهکار می‌شود)
+                        else if (t.type === 'payment' || t.type === 'purchase_return' || t.type === 'sale') debit = t.amount;
                     } else if (type === 'customer') {
-                        if (t.type === 'credit_sale') debit = t.amount;
+                        // فروش به مشتری باعث بدهکار شدن او می‌شود
+                        if (t.type === 'credit_sale' || t.type === 'sale') debit = t.amount;
+                        // دریافت وجه یا برگشت از فروش باعث بستانکار شدن او می‌شود
                         else if (t.type === 'payment' || t.type === 'sale_return') credit = t.amount;
                     } else if (type === 'employee') {
                         const payrollTx = t as PayrollTransaction;
@@ -109,8 +113,8 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
                         <tr key={t.id} className="hover:bg-blue-50 transition-colors border-b last:border-0">
                             <td data-label="تاریخ" className="p-3 text-slate-600">{new Date(t.date).toLocaleDateString('fa-IR')}</td>
                             <td data-label="شرح" className="p-3 text-slate-800 font-semibold">{t.description}</td>
-                            <td data-label="بدهکار" className="p-3 text-red-600 font-mono" dir="ltr">{debit > 0 ? `${debit.toLocaleString('fa-IR')} ${curSuffix}` : '-'}</td>
-                            <td data-label="بستانکار" className="p-3 text-green-600 font-mono" dir="ltr">{credit > 0 ? `${credit.toLocaleString('fa-IR')} ${curSuffix}` : '-'}</td>
+                            <td data-label="بدهکار" className="p-3 text-blue-600 font-bold text-xl" dir="ltr">{debit > 0 ? `${debit.toLocaleString('en-US')} ${curSuffix}` : '-'}</td>
+                            <td data-label="بستانکار" className="p-3 text-red-600 font-bold text-xl" dir="ltr">{credit > 0 ? `${credit.toLocaleString('en-US')} ${curSuffix}` : '-'}</td>
                             <td className="p-3 actions-cell">
                                 {t.type === 'payment' && (
                                     <button onClick={() => onReprint(t.id)} className="p-2 rounded-full text-gray-500 hover:text-green-600 hover:bg-green-100 transition-colors" title="چاپ مجدد رسید">
@@ -136,17 +140,20 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
                             <h2 className="text-xl md:text-2xl font-bold text-slate-800">صورت حساب: {person.name}</h2>
                             {type !== 'employee' && balances ? (
                                 <div className="flex gap-2 md:gap-3 mt-1 flex-wrap">
-                                    <div className="bg-white border px-3 py-1 rounded-xl shadow-sm">
+                                    <div className="bg-white border px-3 py-1 rounded-xl shadow-sm flex flex-col items-center">
                                         <span className="text-[10px] font-black text-slate-400 block uppercase">افغانی</span>
-                                        <span dir="ltr" className={`font-black ${balances.afn > 0 ? 'text-red-600' : 'text-green-600'}`}>{formatBalance(balances.afn)}</span>
+                                        <span dir="ltr" className={`font-black ${balances.afn > 0 ? 'text-red-600' : (balances.afn < 0 ? 'text-green-600' : 'text-slate-400')}`}>{formatBalance(balances.afn)}</span>
+                                        <span className="text-[8px] font-bold opacity-60">{balances.afn > 0 ? 'بدهکاریم' : (balances.afn < 0 ? 'طلبکاریم' : 'تسویه')}</span>
                                     </div>
-                                    <div className="bg-white border px-3 py-1 rounded-xl shadow-sm">
+                                    <div className="bg-white border px-3 py-1 rounded-xl shadow-sm flex flex-col items-center">
                                         <span className="text-[10px] font-black text-slate-400 block uppercase">دلار</span>
-                                        <span dir="ltr" className={`font-black ${balances.usd > 0 ? 'text-red-600' : 'text-green-600'}`}>{formatBalance(balances.usd)}</span>
+                                        <span dir="ltr" className={`font-black ${balances.usd > 0 ? 'text-red-600' : (balances.usd < 0 ? 'text-green-600' : 'text-slate-400')}`}>{formatBalance(balances.usd)}</span>
+                                        <span className="text-[8px] font-bold opacity-60">{balances.usd > 0 ? 'بدهکاریم' : (balances.usd < 0 ? 'طلبکاریم' : 'تسویه')}</span>
                                     </div>
-                                    <div className="bg-white border px-3 py-1 rounded-xl shadow-sm">
+                                    <div className="bg-white border px-3 py-1 rounded-xl shadow-sm flex flex-col items-center">
                                         <span className="text-[10px] font-black text-slate-400 block uppercase">تومان</span>
-                                        <span dir="ltr" className={`font-black ${balances.irt > 0 ? 'text-red-600' : 'text-green-600'}`}>{formatBalance(balances.irt)}</span>
+                                        <span dir="ltr" className={`font-black ${balances.irt > 0 ? 'text-red-600' : (balances.irt < 0 ? 'text-green-600' : 'text-slate-400')}`}>{formatBalance(balances.irt)}</span>
+                                        <span className="text-[8px] font-bold opacity-60">{balances.irt > 0 ? 'بدهکاریم' : (balances.irt < 0 ? 'طلبکاریم' : 'تسویه')}</span>
                                     </div>
                                 </div>
                             ) : (
@@ -194,9 +201,9 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
                      <div className="mt-6 pt-4 border-t text-left font-bold text-xl">
                         {type !== 'employee' && balances ? (
                             <div className="flex flex-col gap-2">
-                                <div>مانده افغانی: <span dir="ltr">{formatBalance(balances.afn)} AFN</span></div>
-                                <div>مانده دلار: <span dir="ltr">{formatBalance(balances.usd)} $</span></div>
-                                <div>مانده تومان: <span dir="ltr">{formatBalance(balances.irt)} IRT</span></div>
+                                <div>مانده افغانی: <span dir="ltr" className={balances.afn > 0 ? 'text-red-600' : (balances.afn < 0 ? 'text-green-600' : '')}>{formatBalance(balances.afn)} AFN</span> <span className="text-sm opacity-60">{balances.afn > 0 ? '(بدهکاریم)' : (balances.afn < 0 ? '(طلبکاریم)' : '(تسویه)')}</span></div>
+                                <div>مانده دلار: <span dir="ltr" className={balances.usd > 0 ? 'text-red-600' : (balances.usd < 0 ? 'text-green-600' : '')}>{formatBalance(balances.usd)} $</span> <span className="text-sm opacity-60">{balances.usd > 0 ? '(بدهکاریم)' : (balances.usd < 0 ? '(طلبکاریم)' : '(تسویه)')}</span></div>
+                                <div>مانده تومان: <span dir="ltr" className={balances.irt > 0 ? 'text-red-600' : (balances.irt < 0 ? 'text-green-600' : '')}>{formatBalance(balances.irt)} IRT</span> <span className="text-sm opacity-60">{balances.irt > 0 ? '(بدهکاریم)' : (balances.irt < 0 ? '(طلبکاریم)' : '(تسویه)')}</span></div>
                             </div>
                         ) : (
                             <>موجودی نهایی: {formatCurrency(person.balance, storeSettings)}</>

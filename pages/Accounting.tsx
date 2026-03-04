@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppContext } from '../AppContext';
 import type { Supplier, Employee, Customer, Expense, AnyTransaction, CustomerTransaction, SupplierTransaction, PayrollTransaction, DepositHolder } from '../types';
-import { PlusIcon, XIcon, EyeIcon, TrashIcon, UserGroupIcon, AccountingIcon, TruckIcon, ChevronDownIcon, CheckIcon, EditIcon, FilterIcon, SettingsIcon } from '../components/icons';
+import { PlusIcon, XIcon, EyeIcon, TrashIcon, UserGroupIcon, AccountingIcon, TruckIcon, ChevronDownIcon, CheckIcon, EditIcon, FilterIcon, SettingsIcon, ArchiveBoxXMarkIcon, CheckCircleIcon } from '../components/icons';
 import Toast from '../components/Toast';
 import { formatCurrency, toEnglishDigits, formatBalance } from '../utils/formatters';
 import TransactionHistoryModal from '../components/TransactionHistoryModal';
@@ -144,9 +144,23 @@ const SuppliersTab = () => {
                                 <td className="p-4 text-lg text-slate-600">{s.phone}</td>
                                 <td className="p-4 text-md font-black" dir="ltr">
                                     <div className="flex flex-col gap-1 items-center">
-                                        <span className="text-red-600">{formatBalance(s.balanceAFN || 0)} {storeSettings.currencyConfigs['AFN']?.name || 'افغانی'}</span>
-                                        <span className="text-blue-600 border-t border-slate-100 pt-0.5">{formatBalance(s.balanceUSD || 0)} {storeSettings.currencyConfigs['USD']?.symbol || '$'}</span>
-                                        <span className="text-orange-600 border-t border-slate-100 pt-0.5">{formatBalance(s.balanceIRT || 0)} {storeSettings.currencyConfigs['IRT']?.name || 'تومان'}</span>
+                                        {[
+                                            { val: s.balanceAFN || 0, name: storeSettings.currencyConfigs['AFN']?.name || 'افغانی' },
+                                            { val: s.balanceUSD || 0, name: storeSettings.currencyConfigs['USD']?.symbol || '$' },
+                                            { val: s.balanceIRT || 0, name: storeSettings.currencyConfigs['IRT']?.name || 'تومان' }
+                                        ].map((item, idx) => (
+                                            <div key={idx} className={`flex items-center gap-2 ${idx > 0 ? 'border-t border-slate-100 pt-0.5 w-full justify-center' : ''}`}>
+                                                <span className={item.val > 0 ? 'text-red-600' : (item.val < 0 ? 'text-emerald-600' : 'text-slate-400')}>
+                                                    {formatBalance(item.val)} {item.name}
+                                                </span>
+                                                <span className="text-[10px] font-bold opacity-60">
+                                                    {item.val > 0 ? '(بدهکاریم)' : (item.val < 0 ? '(طلبکاریم)' : '(تسویه)')}
+                                                </span>
+                                            </div>
+                                        ))}
+                                        {Math.abs(s.balanceAFN || 0) === 0 && Math.abs(s.balanceUSD || 0) === 0 && Math.abs(s.balanceIRT || 0) === 0 && (
+                                            <span className="text-[10px] font-black text-emerald-600 mt-1">تسویه کامل</span>
+                                        )}
                                     </div>
                                 </td>
                                 <td className="p-4">
@@ -171,11 +185,22 @@ const SuppliersTab = () => {
                         </div>
                         <div className="mt-4 pt-4 border-t border-dashed border-slate-200 flex justify-between items-center">
                             <div className="text-right">
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">بدهی ما</p>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">وضعیت حساب</p>
                                 <div className="flex flex-col items-start font-black text-sm" dir="ltr">
-                                    <p className="text-red-600 text-base">{formatBalance(s.balanceAFN || 0)} {storeSettings.currencyConfigs['AFN']?.name || 'افغانی'}</p>
-                                    <p className="text-blue-600">{formatBalance(s.balanceUSD || 0)} {storeSettings.currencyConfigs['USD']?.symbol || '$'}</p>
-                                    <p className="text-orange-600">{formatBalance(s.balanceIRT || 0)} {storeSettings.currencyConfigs['IRT']?.name || 'تومان'}</p>
+                                    {[
+                                        { val: s.balanceAFN || 0, name: storeSettings.currencyConfigs['AFN']?.name || 'افغانی' },
+                                        { val: s.balanceUSD || 0, name: storeSettings.currencyConfigs['USD']?.symbol || '$' },
+                                        { val: s.balanceIRT || 0, name: storeSettings.currencyConfigs['IRT']?.name || 'تومان' }
+                                    ].map((item, idx) => (
+                                        <div key={idx} className="flex items-center gap-2">
+                                            <span className={item.val > 0 ? 'text-red-600' : (item.val < 0 ? 'text-emerald-600' : 'text-slate-400')}>
+                                                {formatBalance(item.val)} {item.name}
+                                            </span>
+                                            <span className="text-[10px] font-bold opacity-60">
+                                                {item.val > 0 ? '(بدهکاریم)' : (item.val < 0 ? '(طلبکاریم)' : '(تسویه)')}
+                                            </span>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                             <button onClick={() => handleOpenPayModal(s)} className="bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-lg active:shadow-none transition-all">ثبت پرداخت</button>
@@ -243,8 +268,11 @@ const SuppliersTab = () => {
 };
 
 const PayrollTab = () => {
-    const { employees, addEmployee, addEmployeeAdvance, payrollTransactions, processAndPaySalaries, storeSettings } = useAppContext();
+    const { employees, addEmployee, updateEmployee, deleteEmployee, toggleEmployeeActive, addEmployeeAdvance, payrollTransactions, processAndPaySalaries, storeSettings } = useAppContext();
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
+    const [showInactive, setShowInactive] = useState(false);
     const [toast, setToast] = useState('');
     const [historyModalData, setHistoryModalData] = useState<{ person: Employee, transactions: PayrollTransaction[] } | null>(null);
 
@@ -255,6 +283,7 @@ const PayrollTab = () => {
         const formData = new FormData(e.currentTarget);
         const basic = Number(toEnglishDigits(formData.get('basicSalary') as string).replace(/[^0-9.]/g, ''));
         const benefits = Number(toEnglishDigits(formData.get('otherBenefits') as string).replace(/[^0-9.]/g, ''));
+        const currency = formData.get('salaryCurrency') as 'AFN' | 'USD' | 'IRT';
         
         addEmployee({
             name: formData.get('name') as string,
@@ -262,13 +291,40 @@ const PayrollTab = () => {
             basicSalary: basic,
             otherBenefits: benefits,
             monthlySalary: basic + benefits,
+            salaryCurrency: currency,
+            isActive: true
         });
         setIsModalOpen(false);
+    };
+
+    const handleEditEmployeeForm = (e: React.FormEvent<HTMLFormElement>) => {
+        e.preventDefault();
+        if (!selectedEmployee) return;
+        const formData = new FormData(e.currentTarget);
+        const basic = Number(toEnglishDigits(formData.get('basicSalary') as string).replace(/[^0-9.]/g, ''));
+        const benefits = Number(toEnglishDigits(formData.get('otherBenefits') as string).replace(/[^0-9.]/g, ''));
+        const currency = formData.get('salaryCurrency') as 'AFN' | 'USD' | 'IRT';
+        
+        updateEmployee({
+            ...selectedEmployee,
+            name: formData.get('name') as string,
+            position: formData.get('position') as string,
+            basicSalary: basic,
+            otherBenefits: benefits,
+            monthlySalary: basic + benefits,
+            salaryCurrency: currency
+        });
+        setIsEditModalOpen(false);
+        setSelectedEmployee(null);
     };
     
     const [advanceCurrency, setAdvanceCurrency] = useState<'AFN' | 'USD' | 'IRT'>(storeSettings.baseCurrency);
     const [advanceRate, setAdvanceRate] = useState('');
     const [advanceAmount, setAdvanceAmount] = useState('');
+
+    const filteredEmployees = useMemo(() => {
+        return employees.filter(e => e.isActive !== showInactive);
+    }, [employees, showInactive]);
 
     const convertedAdvance = useMemo(() => {
         if (!advanceAmount || !advanceRate || Number(advanceRate) <= 0) return 0;
@@ -297,7 +353,7 @@ const PayrollTab = () => {
     };
 
     const handleProcessSalaries = () => {
-        if (window.confirm("آیا از پردازش و پرداخت حقوق تمام کارمندان اطمینان دارید؟ این عمل مابه‌التفاوت حقوق را محاسبه کرده، تمام پیش‌پرداخت‌ها را صفر و پرداخت نهایی را به عنوان هزینه ثبت می‌کند.")) {
+        if (window.confirm("آیا از پردازش و افزودن حقوق ماهانه تمام کارمندان فعال اطمینان دارید؟")) {
             const result = processAndPaySalaries();
             showToast(result.message);
         }
@@ -308,15 +364,34 @@ const PayrollTab = () => {
         setHistoryModalData({ person: employee, transactions });
     };
 
+    const handleDeleteEmployee = (e: Employee) => {
+        if (Math.abs(e.balance) > 0.01) {
+            showToast("حذف کارمند فقط در صورت تسویه کامل حساب امکان‌پذیر است.");
+            return;
+        }
+        if (window.confirm(`آیا از حذف کامل کارمند "${e.name}" اطمینان دارید؟`)) {
+            deleteEmployee(e.id);
+            showToast("کارمند با موفقیت حذف شد.");
+        }
+    };
+
     return (
          <div>
             {toast && <Toast message={toast} onClose={() => setToast('')} />}
-            <div className="flex flex-wrap gap-4 mb-8">
-                <button onClick={() => setIsModalOpen(true)} className="flex items-center bg-blue-600 text-white px-5 py-3 rounded-xl shadow-lg btn-primary">
-                    <PlusIcon className="w-5 h-5 ml-2" /> <span className="font-bold">افزودن کارمند</span>
-                </button>
-                 <button onClick={handleProcessSalaries} className="flex items-center bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-lg btn-primary hover:!shadow-emerald-200 transition-all">
-                    <span className="font-bold">پردازش و تسویه حقوق ماهانه</span>
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+                <div className="flex gap-4">
+                    <button onClick={() => setIsModalOpen(true)} className="flex items-center bg-blue-600 text-white px-5 py-3 rounded-xl shadow-lg hover:bg-blue-700 transition-all active:scale-95">
+                        <PlusIcon className="w-5 h-5 ml-2" /> <span className="font-bold">افزودن کارمند</span>
+                    </button>
+                    <button onClick={handleProcessSalaries} className="flex items-center bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-lg hover:bg-emerald-700 transition-all active:scale-95">
+                        <span className="font-bold">پردازش حقوق ماهانه</span>
+                    </button>
+                </div>
+                <button 
+                    onClick={() => setShowInactive(!showInactive)} 
+                    className={`flex items-center px-5 py-3 rounded-xl border-2 transition-all font-bold ${showInactive ? 'bg-slate-800 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'}`}
+                >
+                    {showInactive ? 'مشاهده کارمندان فعال' : 'مشاهده بایگانی (غیرفعال)'}
                 </button>
             </div>
 
@@ -324,45 +399,73 @@ const PayrollTab = () => {
                 <table className="min-w-full text-center table-zebra">
                     <thead className="bg-slate-50">
                         <tr>
-                            <th className="p-4 font-bold text-slate-700"></th>
+                            <th className="p-4 font-bold text-slate-700">عملیات</th>
                             <th className="p-4 font-bold text-slate-700 text-right">نام کارمند</th>
                             <th className="p-4 font-bold text-slate-700">حقوق ماهانه</th>
-                            <th className="p-4 font-bold text-slate-700">مانده ({storeSettings.currencyConfigs['AFN']?.name || 'افغانی'})</th>
-                            <th className="p-4 font-bold text-slate-700">مانده ({storeSettings.currencyConfigs['USD']?.name || 'دلار'})</th>
-                            <th className="p-4 font-bold text-slate-700">مانده ({storeSettings.currencyConfigs['IRT']?.name || 'تومان'})</th>
+                            <th className="p-4 font-bold text-slate-700">باقیمانده حقوق</th>
                             <th className="p-4 font-bold text-slate-700">ثبت مساعده / پاداش</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {employees.map(e => (
-                            <tr key={e.id} className="border-t border-gray-200 hover:bg-blue-50/30 transition-colors">
+                        {filteredEmployees.map(e => (
+                            <tr key={e.id} className={`border-t border-gray-200 hover:bg-blue-50/30 transition-colors ${!e.isActive ? 'opacity-60 grayscale-[0.5]' : ''}`}>
                                 <td className="p-4">
-                                    <button onClick={() => handleViewHistory(e)} className="p-2 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-blue-100 transition-all"><EyeIcon className="w-6 h-6"/></button>
+                                    <div className="flex justify-center items-center gap-1">
+                                        <button onClick={() => handleViewHistory(e)} className="p-2 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-blue-100 transition-all" title="مشاهده صورتحساب"><EyeIcon className="w-6 h-6"/></button>
+                                        <button onClick={() => { setSelectedEmployee(e); setIsEditModalOpen(true); }} className="p-2 rounded-xl text-slate-500 hover:text-amber-600 hover:bg-amber-100 transition-all" title="ویرایش اطلاعات"><EditIcon className="w-6 h-6"/></button>
+                                        <button 
+                                            onClick={() => toggleEmployeeActive(e.id)} 
+                                            className={`p-2 rounded-xl transition-all ${e.isActive ? 'text-slate-400 hover:text-slate-600 hover:bg-slate-100' : 'text-emerald-500 hover:text-emerald-600 hover:bg-emerald-100'}`}
+                                            title={e.isActive ? "بایگانی کارمند" : "فعال‌سازی مجدد"}
+                                        >
+                                            {e.isActive ? <ArchiveBoxXMarkIcon className="w-6 h-6"/> : <CheckCircleIcon className="w-6 h-6"/>}
+                                        </button>
+                                        <button 
+                                            onClick={() => handleDeleteEmployee(e)} 
+                                            className={`p-2 rounded-xl transition-all ${Math.abs(e.balance) < 0.01 ? 'text-red-400 hover:text-red-600 hover:bg-red-100' : 'text-slate-200 cursor-not-allowed'}`}
+                                            title="حذف کامل"
+                                            disabled={Math.abs(e.balance) >= 0.01}
+                                        >
+                                            <TrashIcon className="w-6 h-6"/>
+                                        </button>
+                                    </div>
                                 </td>
-                                <td className="p-4 text-lg font-bold text-slate-800 text-right">{e.name}</td>
-                                <td className="p-4 text-md text-slate-600 font-bold">{formatCurrency(e.monthlySalary, storeSettings)}</td>
-                                <td className="p-4 text-md font-bold text-red-500">{e.balanceAFN.toLocaleString()}</td>
-                                <td className="p-4 text-md font-bold text-blue-500">{e.balanceUSD.toLocaleString()}</td>
-                                <td className="p-4 text-md font-bold text-orange-500">{e.balanceIRT.toLocaleString()}</td>
+                                <td className="p-4 text-right">
+                                    <p className="text-lg font-bold text-slate-800">{e.name}</p>
+                                    <p className="text-[10px] text-slate-400 font-bold">{e.position}</p>
+                                </td>
+                                <td className="p-4 text-xl font-black text-slate-700" dir="ltr">
+                                    {e.monthlySalary.toLocaleString('en-US')} {storeSettings.currencyConfigs[e.salaryCurrency || 'AFN']?.name}
+                                </td>
+                                <td className="p-4" dir="ltr">
+                                    <div className="flex flex-col items-center">
+                                        <span className={`text-2xl font-black ${e.balance > 0 ? 'text-emerald-600' : (e.balance < 0 ? 'text-red-600' : 'text-slate-400')}`}>
+                                            {e.balance.toLocaleString('en-US', {maximumFractionDigits: 2})}
+                                        </span>
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase">
+                                            {storeSettings.currencyConfigs[e.salaryCurrency || 'AFN']?.name}
+                                        </span>
+                                    </div>
+                                </td>
                                 <td className="p-4">
-                                    <form onSubmit={(ev) => handleAddAdvanceForm(ev, e.id)} className="flex flex-col gap-2 w-full max-w-sm mx-auto">
-                                        <div className="flex gap-2">
-                                            <select value={advanceCurrency} onChange={(e) => setAdvanceCurrency(e.target.value as any)} className="p-2 border border-slate-200 rounded-xl text-xs font-bold bg-white">
-                                                {['AFN', 'USD', 'IRT'].map(c => <option key={c} value={c}>{storeSettings.currencyConfigs[c as 'AFN'|'USD'|'IRT']?.name || c}</option>)}
-                                            </select>
-                                            <input type="text" inputMode="decimal" name="amount" value={advanceAmount} onChange={(e) => setAdvanceAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} className="flex-grow p-2 border border-slate-200 rounded-xl text-center font-bold focus:ring-2 focus:ring-amber-500 outline-none" placeholder="مبلغ" required />
-                                        </div>
-                                        {advanceCurrency !== storeSettings.baseCurrency && (
-                                            <input type="text" inputMode="decimal" value={advanceRate} onChange={e => setAdvanceRate(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} className="w-full p-2 border border-slate-200 rounded-xl text-center text-xs font-mono" placeholder={`نرخ تبدیل (${storeSettings.currencyConfigs[storeSettings.baseCurrency].name} به ${advanceCurrency})`} required />
-                                        )}
-                                        {advanceCurrency !== storeSettings.baseCurrency && convertedAdvance > 0 && (
-                                            <p className="text-[10px] font-black text-amber-600 text-left">معادل: {convertedAdvance < 1 ? convertedAdvance.toFixed(4) : convertedAdvance.toLocaleString(undefined, { maximumFractionDigits: 2 })} {storeSettings.currencyConfigs[storeSettings.baseCurrency].name}</p>
-                                        )}
-                                        <div className="flex gap-2">
-                                            <input type="text" name="description" className="flex-grow p-2 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-amber-500 outline-none" placeholder="توضیحات (اختیاری)" />
-                                            <button type="submit" className="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md hover:shadow-amber-100 transition-all active:scale-95">ثبت</button>
-                                        </div>
-                                    </form>
+                                    {e.isActive && (
+                                        <form onSubmit={(ev) => handleAddAdvanceForm(ev, e.id)} className="flex flex-col gap-2 w-full max-w-sm mx-auto">
+                                            <div className="flex gap-2">
+                                                <select value={advanceCurrency} onChange={(e) => setAdvanceCurrency(e.target.value as any)} className="p-2 border border-slate-200 rounded-xl text-xs font-bold bg-white">
+                                                    {['AFN', 'USD', 'IRT'].map(c => <option key={c} value={c}>{storeSettings.currencyConfigs[c as 'AFN'|'USD'|'IRT']?.name || c}</option>)}
+                                                </select>
+                                                <input type="text" inputMode="decimal" name="amount" value={advanceAmount} onChange={(e) => setAdvanceAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} className="flex-grow p-2 border border-slate-200 rounded-xl text-center font-bold focus:ring-2 focus:ring-amber-500 outline-none" placeholder="مبلغ" required />
+                                            </div>
+                                            {advanceCurrency !== storeSettings.baseCurrency && (
+                                                <input type="text" inputMode="decimal" value={advanceRate} onChange={e => setAdvanceRate(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} className="w-full p-2 border border-slate-200 rounded-xl text-center text-xs font-mono" placeholder={`نرخ تبدیل (${storeSettings.currencyConfigs[storeSettings.baseCurrency].name} به ${advanceCurrency})`} required />
+                                            )}
+                                            <div className="flex gap-2">
+                                                <input type="text" name="description" className="flex-grow p-2 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-amber-500 outline-none" placeholder="توضیحات (اختیاری)" />
+                                                <button type="submit" className="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md hover:shadow-amber-100 transition-all active:scale-95">ثبت</button>
+                                            </div>
+                                        </form>
+                                    )}
+                                    {!e.isActive && <span className="text-xs font-bold text-slate-400 italic">کارمند غیرفعال است</span>}
                                 </td>
                             </tr>
                         ))}
@@ -371,38 +474,40 @@ const PayrollTab = () => {
             </div>
 
             <div className="md:hidden space-y-4">
-                {employees.map(e => (
-                    <div key={e.id} className="bg-white/80 p-5 rounded-2xl shadow-md border border-slate-100">
+                {filteredEmployees.map(e => (
+                    <div key={e.id} className={`bg-white/80 p-5 rounded-2xl shadow-md border border-slate-100 ${!e.isActive ? 'opacity-60 grayscale-[0.5]' : ''}`}>
                         <div className="flex justify-between items-start mb-4">
                             <div>
                                 <h3 className="font-black text-xl text-slate-800">{e.name}</h3>
                                 <p className="text-xs text-slate-400">{e.position || 'کارمند فروشگاه'}</p>
                             </div>
-                            <button onClick={() => handleViewHistory(e)} className="p-2.5 bg-slate-100 rounded-xl text-slate-600 active:bg-blue-100 active:text-blue-600"><EyeIcon className="w-5 h-5"/></button>
+                            <div className="flex gap-1">
+                                <button onClick={() => handleViewHistory(e)} className="p-2.5 bg-slate-100 rounded-xl text-slate-600 active:bg-blue-100 active:text-blue-600"><EyeIcon className="w-5 h-5"/></button>
+                                <button onClick={() => { setSelectedEmployee(e); setIsEditModalOpen(true); }} className="p-2.5 bg-slate-100 rounded-xl text-slate-600 active:bg-amber-100 active:text-amber-600"><EditIcon className="w-5 h-5"/></button>
+                                <button onClick={() => toggleEmployeeActive(e.id)} className="p-2.5 bg-slate-100 rounded-xl text-slate-600 active:bg-slate-200">{e.isActive ? <ArchiveBoxXMarkIcon className="w-5 h-5"/> : <CheckCircleIcon className="w-5 h-5 text-emerald-600"/>}</button>
+                            </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4 mb-4 text-right bg-slate-50/50 p-3 rounded-xl border border-slate-100">
                             <div>
                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">حقوق ماهانه</p>
-                                <p className="font-bold text-slate-700">{formatCurrency(e.monthlySalary, storeSettings)}</p>
+                                <p className="font-black text-slate-700 text-lg" dir="ltr">{e.monthlySalary.toLocaleString('en-US')} {storeSettings.currencyConfigs[e.salaryCurrency || 'AFN']?.name}</p>
                             </div>
                             <div>
-                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">پیش‌پرداخت</p>
-                                <p className="font-bold text-red-500">{formatCurrency(e.balance, storeSettings)}</p>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">باقیمانده</p>
+                                <p className={`font-black text-lg ${e.balance > 0 ? 'text-emerald-600' : (e.balance < 0 ? 'text-red-600' : 'text-slate-400')}`} dir="ltr">{e.balance.toLocaleString('en-US')} {storeSettings.currencyConfigs[e.salaryCurrency || 'AFN']?.name}</p>
                             </div>
                         </div>
-                        <div className="pt-3 border-t border-dashed border-slate-200">
-                             <div className="flex justify-between items-center mb-3">
-                                <p className="text-[10px] text-emerald-600 font-bold uppercase">مانده تسویه</p>
-                                <p className="font-black text-emerald-600 text-lg">{formatCurrency(e.monthlySalary - e.balance, storeSettings)}</p>
+                        {e.isActive && (
+                            <div className="pt-3 border-t border-dashed border-slate-200">
+                                <form onSubmit={(ev) => handleAddAdvanceForm(ev, e.id)} className="flex flex-col gap-2 p-3 bg-slate-100/50 rounded-xl border border-slate-200">
+                                    <div className="flex gap-2">
+                                        <input type="text" inputMode="decimal" name="amount" onInput={(e:any) => e.target.value = toEnglishDigits(e.target.value).replace(/[^0-9.]/g, '')} className="w-1/3 p-2.5 border border-slate-200 rounded-xl text-center text-sm font-bold" placeholder="مبلغ" required />
+                                        <input type="text" name="description" className="w-2/3 p-2.5 border border-slate-200 rounded-xl text-xs" placeholder="توضیحات (اختیاری)" />
+                                    </div>
+                                    <button type="submit" className="w-full bg-amber-500 text-white py-2.5 rounded-xl text-sm font-black shadow-md active:translate-y-0.5 transition-all">ثبت تراکنش مالی</button>
+                                </form>
                             </div>
-                            <form onSubmit={(ev) => handleAddAdvanceForm(ev, e.id)} className="flex flex-col gap-2 p-3 bg-slate-100/50 rounded-xl border border-slate-200">
-                                <div className="flex gap-2">
-                                    <input type="text" inputMode="decimal" name="amount" onInput={(e:any) => e.target.value = toEnglishDigits(e.target.value).replace(/[^0-9.]/g, '')} className="w-1/3 p-2.5 border border-slate-200 rounded-xl text-center text-sm font-bold" placeholder="مبلغ" required />
-                                    <input type="text" name="description" className="w-2/3 p-2.5 border border-slate-200 rounded-xl text-xs" placeholder="توضیحات (اختیاری)" />
-                                </div>
-                                <button type="submit" className="w-full bg-amber-500 text-white py-2.5 rounded-xl text-sm font-black shadow-md active:translate-y-0.5 transition-all">ثبت تراکنش مالی</button>
-                            </form>
-                        </div>
+                        )}
                     </div>
                 ))}
             </div>
@@ -416,10 +521,47 @@ const PayrollTab = () => {
                             <input name="basicSalary" type="text" inputMode="decimal" onInput={(e:any) => e.target.value = toEnglishDigits(e.target.value).replace(/[^0-9.]/g, '')} placeholder="حقوق پایه" className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50 font-bold" required />
                             <input name="otherBenefits" type="text" inputMode="decimal" onInput={(e:any) => e.target.value = toEnglishDigits(e.target.value).replace(/[^0-9.]/g, '')} placeholder="سایر مزایا" className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50 font-bold" defaultValue="0" />
                         </div>
+                        <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                            <p className="text-xs font-bold text-slate-500 mb-3">ارز پایه حقوق:</p>
+                            <div className="flex gap-4">
+                                {['AFN', 'USD', 'IRT'].map(cur => (
+                                    <label key={cur} className="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="salaryCurrency" value={cur} defaultChecked={cur === storeSettings.baseCurrency} className="text-blue-600" />
+                                        <span className="text-sm font-bold text-slate-700">{storeSettings.currencyConfigs[cur as 'AFN'|'USD'|'IRT']?.name}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
                         <button type="submit" className="w-full bg-blue-600 text-white p-4 rounded-xl shadow-xl shadow-blue-100 font-black text-lg">ذخیره کارمند</button>
                     </form>
                 </Modal>
             )}
+
+            {isEditModalOpen && selectedEmployee && (
+                <Modal title={`ویرایش کارمند: ${selectedEmployee.name}`} onClose={() => { setIsEditModalOpen(false); setSelectedEmployee(null); }}>
+                    <form onSubmit={handleEditEmployeeForm} className="space-y-4">
+                        <input name="name" defaultValue={selectedEmployee.name} placeholder="نام کامل" className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50" required />
+                        <input name="position" defaultValue={selectedEmployee.position} placeholder="موقعیت شغلی" className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50" />
+                        <div className="grid grid-cols-2 gap-4">
+                            <input name="basicSalary" defaultValue={selectedEmployee.basicSalary} type="text" inputMode="decimal" onInput={(e:any) => e.target.value = toEnglishDigits(e.target.value).replace(/[^0-9.]/g, '')} placeholder="حقوق پایه" className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50 font-bold" required />
+                            <input name="otherBenefits" defaultValue={selectedEmployee.otherBenefits} type="text" inputMode="decimal" onInput={(e:any) => e.target.value = toEnglishDigits(e.target.value).replace(/[^0-9.]/g, '')} placeholder="سایر مزایا" className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50 font-bold" />
+                        </div>
+                        <div className="p-4 bg-slate-50 rounded-xl border border-slate-200">
+                            <p className="text-xs font-bold text-slate-500 mb-3">ارز پایه حقوق:</p>
+                            <div className="flex gap-4">
+                                {['AFN', 'USD', 'IRT'].map(cur => (
+                                    <label key={cur} className="flex items-center gap-2 cursor-pointer">
+                                        <input type="radio" name="salaryCurrency" value={cur} defaultChecked={cur === selectedEmployee.salaryCurrency} className="text-blue-600" />
+                                        <span className="text-sm font-bold text-slate-700">{storeSettings.currencyConfigs[cur as 'AFN'|'USD'|'IRT']?.name}</span>
+                                    </label>
+                                ))}
+                            </div>
+                        </div>
+                        <button type="submit" className="w-full bg-amber-600 text-white p-4 rounded-xl shadow-xl shadow-amber-100 font-black text-lg">بروزرسانی اطلاعات</button>
+                    </form>
+                </Modal>
+            )}
+
             {historyModalData && (
                  <TransactionHistoryModal 
                     person={historyModalData.person}
@@ -606,9 +748,20 @@ const CustomersTab = () => {
                                 <td className="p-4 text-md text-slate-600">{c.phone}</td>
                                 <td className="p-4 text-md font-black" dir="ltr">
                                     <div className="flex flex-col gap-1 items-center">
-                                        <span className="text-emerald-600">{formatBalance(c.balanceAFN || 0)} {storeSettings.currencyConfigs['AFN']?.name || 'افغانی'}</span>
-                                        <span className="text-blue-600 border-t border-slate-100 pt-0.5">{formatBalance(c.balanceUSD || 0)} {storeSettings.currencyConfigs['USD']?.symbol || '$'}</span>
-                                        <span className="text-orange-600 border-t border-slate-100 pt-0.5">{formatBalance(c.balanceIRT || 0)} {storeSettings.currencyConfigs['IRT']?.name || 'تومان'}</span>
+                                        {[
+                                            { val: c.balanceAFN || 0, name: storeSettings.currencyConfigs['AFN']?.name || 'افغانی' },
+                                            { val: c.balanceUSD || 0, name: storeSettings.currencyConfigs['USD']?.symbol || '$' },
+                                            { val: c.balanceIRT || 0, name: storeSettings.currencyConfigs['IRT']?.name || 'تومان' }
+                                        ].map((item, idx) => (
+                                            <div key={idx} className="flex items-center gap-2">
+                                                <span className={item.val > 0 ? 'text-blue-600' : (item.val < 0 ? 'text-red-600' : 'text-slate-400')}>
+                                                    {item.val.toLocaleString('en-US')} {item.name}
+                                                </span>
+                                                <span className="text-[10px] font-bold opacity-60">
+                                                    {item.val > 0 ? '(طلبکاریم)' : (item.val < 0 ? '(بدهکاریم)' : '(تسویه)')}
+                                                </span>
+                                            </div>
+                                        ))}
                                     </div>
                                 </td>
                                 <td className="p-4">
@@ -650,11 +803,22 @@ const CustomersTab = () => {
                         </div>
                         <div className="mt-4 pt-4 border-t border-dashed border-slate-200 flex justify-between items-center">
                             <div className="text-right">
-                                <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-tighter">طلب ما</p>
+                                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">وضعیت حساب</p>
                                 <div className="flex flex-col items-start font-black text-sm" dir="ltr">
-                                    <p className="text-emerald-600 text-base">{formatBalance(c.balanceAFN || 0)} {storeSettings.currencyConfigs['AFN']?.name || 'افغانی'}</p>
-                                    <p className="text-blue-600">{formatBalance(c.balanceUSD || 0)} {storeSettings.currencyConfigs['USD']?.symbol || '$'}</p>
-                                    <p className="text-orange-600">{formatBalance(c.balanceIRT || 0)} {storeSettings.currencyConfigs['IRT']?.name || 'تومان'}</p>
+                                    {[
+                                        { val: c.balanceAFN || 0, name: storeSettings.currencyConfigs['AFN']?.name || 'افغانی' },
+                                        { val: c.balanceUSD || 0, name: storeSettings.currencyConfigs['USD']?.symbol || '$' },
+                                        { val: c.balanceIRT || 0, name: storeSettings.currencyConfigs['IRT']?.name || 'تومان' }
+                                    ].map((item, idx) => (
+                                        <div key={idx} className="flex items-center gap-2">
+                                            <span className={item.val > 0 ? 'text-blue-600' : (item.val < 0 ? 'text-red-600' : 'text-slate-400')}>
+                                                {item.val.toLocaleString('en-US')} {item.name}
+                                            </span>
+                                            <span className="text-[10px] font-bold opacity-60">
+                                                {item.val > 0 ? '(طلبکاریم)' : (item.val < 0 ? '(بدهکاریم)' : '(تسویه)')}
+                                            </span>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                             <button onClick={() => handleOpenPayModal(c)} className="bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-lg shadow-emerald-100 active:shadow-none transition-all">ثبت دریافت</button>
@@ -955,10 +1119,10 @@ const ExpensesTab = () => {
                                 <td className="p-4">
                                     <span className="px-3 py-1 bg-slate-100 rounded-full text-xs font-bold text-slate-500">{getCategoryLabel(e.category)}</span>
                                 </td>
-                                <td className="p-4 text-lg font-black text-red-600" dir="ltr">
-                                    {e.amount.toLocaleString()} {e.currency || baseCurrency}
+                                <td className="p-4 text-xl font-bold text-red-600" dir="ltr">
+                                    {e.amount.toLocaleString('en-US')} {e.currency || baseCurrency}
                                 </td>
-                                <td className="p-4 text-lg font-black text-slate-800" dir="ltr">
+                                <td className="p-4 text-xl font-bold text-slate-800" dir="ltr">
                                     {formatCurrency(e.amountBase || e.amount, storeSettings)}
                                 </td>
                                 <td className="p-4">
@@ -989,7 +1153,7 @@ const ExpensesTab = () => {
                                 </div>
                             </div>
                             <div className="text-left">
-                                <p className="font-black text-red-600 text-lg" dir="ltr">{e.amount.toLocaleString()} {e.currency || baseCurrency}</p>
+                                <p className="font-bold text-red-600 text-xl" dir="ltr">{e.amount.toLocaleString('en-US')} {e.currency || baseCurrency}</p>
                                 <p className="text-[10px] text-slate-400 font-bold">{formatCurrency(e.amountBase || e.amount, storeSettings)}</p>
                             </div>
                         </div>

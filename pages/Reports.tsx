@@ -174,8 +174,15 @@ const Reports: React.FC = () => {
 
     const financialPositionData = useMemo(() => {
         const invVal = inventoryData.totalBookValue;
-        const custRec = customers.reduce((sum, c) => sum + (c.balance > 0 ? c.balance : 0), 0);
-        const suppPay = suppliers.reduce((sum, s) => sum + (s.balance > 0 ? s.balance : 0), 0);
+        
+        // Customers: Positive balance = they owe us (Receivable), Negative balance = we owe them (Payable)
+        const custReceivables = customers.reduce((sum, c) => sum + (c.balance > 0 ? c.balance : 0), 0);
+        const custPayables = customers.reduce((sum, c) => sum + (c.balance < 0 ? Math.abs(c.balance) : 0), 0);
+        
+        // Suppliers: Positive balance = we owe them (Payable), Negative balance = they owe us (Receivable)
+        const suppPayables = suppliers.reduce((sum, s) => sum + (s.balance > 0 ? s.balance : 0), 0);
+        const suppReceivables = suppliers.reduce((sum, s) => sum + (s.balance < 0 ? Math.abs(s.balance) : 0), 0);
+        
         const deferredAssets = supplyChainData.totalValueBase;
         
         // Segregate deposits into assets (when they owe us - Besan-kari) and liabilities (when we owe them - Amanat)
@@ -190,15 +197,17 @@ const Reports: React.FC = () => {
         
         const totalWastage = (wastageRecords || []).reduce((sum, w) => sum + w.totalCost, 0);
 
-        const totalAssets = invVal + cashPosition + custRec + depositAssets + deferredAssets;
-        const totalLiabilities = suppPay + depositLiabilities;
+        const totalAssets = invVal + cashPosition + custReceivables + suppReceivables + depositAssets + deferredAssets;
+        const totalLiabilities = suppPayables + custPayables + depositLiabilities;
         const netWorthRaw = totalAssets - totalLiabilities;
 
         return { 
             inventoryValue: invVal, 
             cashInHand: cashPosition,
-            customerReceivables: custRec, 
-            supplierPayables: suppPay, 
+            customerReceivables: custReceivables,
+            customerPayables: custPayables,
+            supplierPayables: suppPayables,
+            supplierReceivables: suppReceivables,
             deferredAssets,
             totalWastage,
             totalAssets, 
@@ -206,7 +215,7 @@ const Reports: React.FC = () => {
             netDepositAsset: depositAssets,
             netDepositLiability: depositLiabilities
         };
-    }, [inventoryData, customers, suppliers, supplyChainData, cashPosition, depositHolders]);
+    }, [inventoryData, customers, suppliers, supplyChainData, cashPosition, depositHolders, wastageRecords]);
 
     const collectionsData = useMemo(() => {
         const filtered = customerTransactions.filter(t => {
@@ -377,7 +386,7 @@ const Reports: React.FC = () => {
         <div className="bg-white/80 p-4 md:p-5 rounded-2xl shadow-sm border border-slate-200/60 flex flex-col justify-center h-28 md:h-32 transition-all hover:shadow-md relative overflow-hidden group">
             {icon && <div className="absolute -left-2 -bottom-2 opacity-5 scale-150 transform group-hover:scale-[1.7] transition-transform duration-500 text-slate-900">{icon}</div>}
             <h4 className="text-xs md:text-md font-bold text-slate-500 mb-1 md:mb-2 truncate relative z-10">{title}</h4>
-            <p className={`text-xl md:text-3xl font-black ${color} whitespace-nowrap overflow-hidden text-ellipsis relative z-10`} dir="ltr">{value}</p>
+            <p className={`text-2xl md:text-4xl font-black ${color} whitespace-nowrap overflow-hidden text-ellipsis relative z-10`} dir="ltr">{value}</p>
         </div>
     );
 
@@ -387,9 +396,9 @@ const Reports: React.FC = () => {
                 return (
                     <div className="space-y-6">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <SmartStatCard title={`فروش خالص (${storeSettings.currencyConfigs[storeSettings.baseCurrency]?.name || storeSettings.baseCurrency})`} value={formatCurrency(salesData.netSales, storeSettings)} color="text-blue-600" icon={<POSIcon/>}/>
-                            <SmartStatCard title={`سود خالص (${storeSettings.currencyConfigs[storeSettings.baseCurrency]?.name || storeSettings.baseCurrency})`} value={formatCurrency(salesData.netIncome, storeSettings)} color="text-green-600" icon={<DashboardIcon/>}/>
-                            <SmartStatCard title="هزینه‌ها" value={formatCurrency(salesData.totalExpenses, storeSettings)} color="text-red-500" icon={<WarningIcon/>}/>
+                            <SmartStatCard title={`فروش خالص (${storeSettings.currencyConfigs[storeSettings.baseCurrency]?.name || storeSettings.baseCurrency})`} value={formatCurrency(salesData.netSales, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-blue-600" icon={<POSIcon/>}/>
+                            <SmartStatCard title={`سود خالص (${storeSettings.currencyConfigs[storeSettings.baseCurrency]?.name || storeSettings.baseCurrency})`} value={formatCurrency(salesData.netIncome, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-green-600" icon={<DashboardIcon/>}/>
+                            <SmartStatCard title="هزینه‌ها" value={formatCurrency(salesData.totalExpenses, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-red-500" icon={<WarningIcon/>}/>
                         </div>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div className="p-5 bg-white rounded-2xl border border-slate-100 shadow-sm">
@@ -413,9 +422,9 @@ const Reports: React.FC = () => {
                 return (
                     <div className="space-y-6">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <SmartStatCard title="ارزش دفتری انبار (خرید)" value={formatCurrency(inventoryData.totalBookValue, storeSettings)} color="text-slate-600" icon={<InventoryIcon/>}/>
-                            <SmartStatCard title="ارزش روز انبار (فروش)" value={formatCurrency(inventoryData.totalSalesValue, storeSettings)} color="text-blue-600" icon={<ReportsIcon/>}/>
-                            <SmartStatCard title="سود موجود در انبار" value={formatCurrency(inventoryData.projectedProfit, storeSettings)} color="text-emerald-600" icon={<DashboardIcon/>}/>
+                            <SmartStatCard title="ارزش دفتری انبار (خرید)" value={formatCurrency(inventoryData.totalBookValue, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-slate-600" icon={<InventoryIcon/>}/>
+                            <SmartStatCard title="ارزش روز انبار (فروش)" value={formatCurrency(inventoryData.totalSalesValue, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-blue-600" icon={<ReportsIcon/>}/>
+                            <SmartStatCard title="سود موجود در انبار" value={formatCurrency(inventoryData.projectedProfit, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-emerald-600" icon={<DashboardIcon/>}/>
                         </div>
                         
                         <div className="p-4 bg-blue-50 border-r-4 border-blue-600 rounded-l-xl flex flex-col gap-1">
@@ -461,8 +470,8 @@ const Reports: React.FC = () => {
                 return (
                     <div className="space-y-6">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <SmartStatCard title={`سرمایه در جاده (${storeSettings.currencyConfigs[storeSettings.baseCurrency]?.name || storeSettings.baseCurrency})`} value={formatCurrency(supplyChainData.totalValueBase, storeSettings)} color="text-blue-700" icon={<TruckIcon/>}/>
-                            <SmartStatCard title="مجموع پیش‌پرداخت‌ها" value={formatCurrency(supplyChainData.totalPrepaymentsBase, storeSettings)} color="text-emerald-600" icon={<AccountingIcon/>}/>
+                            <SmartStatCard title={`سرمایه در جاده (${storeSettings.currencyConfigs[storeSettings.baseCurrency]?.name || storeSettings.baseCurrency})`} value={formatCurrency(supplyChainData.totalValueBase, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-blue-700" icon={<TruckIcon/>}/>
+                            <SmartStatCard title="مجموع پیش‌پرداخت‌ها" value={formatCurrency(supplyChainData.totalPrepaymentsBase, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-emerald-600" icon={<AccountingIcon/>}/>
                             <SmartStatCard title="سفارشات معوق" value={`${supplyChainData.orderCount} مورد`} color="text-slate-500" />
                         </div>
                         <div className="p-6 bg-amber-50 rounded-3xl border border-amber-200">
@@ -478,13 +487,13 @@ const Reports: React.FC = () => {
                 return (
                     <div className="space-y-6">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                            <SmartStatCard title={`کل امانات (${storeSettings.currencyConfigs['AFN']?.name || 'AFN'})`} value={depositHolders.reduce((s,h)=>s+h.balanceAFN, 0).toLocaleString(undefined, {maximumFractionDigits: 3})} color="text-indigo-600" icon={<SafeIcon/>}/>
-                            <SmartStatCard title={`کل امانات (${storeSettings.currencyConfigs['USD']?.name || 'USD'})`} value={depositHolders.reduce((s,h)=>s+h.balanceUSD, 0).toLocaleString(undefined, {maximumFractionDigits: 3})} color="text-emerald-600" icon={<SafeIcon/>}/>
-                            <SmartStatCard title={`کل امانات (${storeSettings.currencyConfigs['IRT']?.name || 'IRT'})`} value={depositHolders.reduce((s,h)=>s+h.balanceIRT, 0).toLocaleString(undefined, {maximumFractionDigits: 3})} color="text-orange-600" icon={<SafeIcon/>}/>
+                            <SmartStatCard title={`کل امانات (${storeSettings.currencyConfigs['AFN']?.name || 'AFN'})`} value={depositHolders.reduce((s,h)=>s+h.balanceAFN, 0).toLocaleString('en-US', {maximumFractionDigits: 3})} color="text-indigo-600" icon={<SafeIcon/>}/>
+                            <SmartStatCard title={`کل امانات (${storeSettings.currencyConfigs['USD']?.name || 'USD'})`} value={depositHolders.reduce((s,h)=>s+h.balanceUSD, 0).toLocaleString('en-US', {maximumFractionDigits: 3})} color="text-emerald-600" icon={<SafeIcon/>}/>
+                            <SmartStatCard title={`کل امانات (${storeSettings.currencyConfigs['IRT']?.name || 'IRT'})`} value={depositHolders.reduce((s,h)=>s+h.balanceIRT, 0).toLocaleString('en-US', {maximumFractionDigits: 3})} color="text-orange-600" icon={<SafeIcon/>}/>
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <SmartStatCard title="مجموع طلب از امانت‌گذاران (بسان‌کاری)" value={formatCurrency(financialPositionData.netDepositAsset, storeSettings)} color="text-blue-600" icon={<ReportsIcon/>}/>
-                            <SmartStatCard title="مجموع بدهی به امانت‌گذاران (امانات)" value={formatCurrency(financialPositionData.netDepositLiability, storeSettings)} color="text-indigo-600" icon={<SafeIcon/>}/>
+                            <SmartStatCard title="مجموع طلب از امانت‌گذاران (بسان‌کاری)" value={formatCurrency(financialPositionData.netDepositAsset, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-blue-600" icon={<ReportsIcon/>}/>
+                            <SmartStatCard title="مجموع بدهی به امانت‌گذاران (امانات)" value={formatCurrency(financialPositionData.netDepositLiability, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-indigo-600" icon={<SafeIcon/>}/>
                         </div>
                         <div className="p-6 bg-indigo-50 rounded-3xl border border-indigo-200">
                              <h4 className="font-black text-indigo-800 mb-2">تراز صندوق امانات</h4>
@@ -501,30 +510,36 @@ const Reports: React.FC = () => {
                         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                             <div className="space-y-4">
                                 <h3 className="font-black text-green-700 flex items-center gap-2 px-1"><div className="w-2 h-2 rounded-full bg-green-500"></div> دارایی‌ها</h3>
-                                <SmartStatCard title={`موجودی انبار (${storeSettings.currencyConfigs[storeSettings.baseCurrency]?.name || storeSettings.baseCurrency})`} value={formatCurrency(financialPositionData.inventoryValue, storeSettings)} color="text-slate-800" />
-                                <SmartStatCard title="موجودی نقد (تخمینی)" value={formatCurrency(financialPositionData.cashInHand, storeSettings)} color="text-blue-700" icon={<SafeIcon />} />
-                                <SmartStatCard title={`طلب از مشتریان (${storeSettings.currencyConfigs[storeSettings.baseCurrency]?.name || storeSettings.baseCurrency})`} value={formatCurrency(financialPositionData.customerReceivables, storeSettings)} color="text-slate-800" />
-                                <SmartStatCard title="بسان‌کاری (طلب از امانات)" value={formatCurrency(financialPositionData.netDepositAsset, storeSettings)} color="text-blue-600" />
-                                <SmartStatCard title="کالای نرسیده (Deferred)" value={formatCurrency(financialPositionData.deferredAssets, storeSettings)} color="text-blue-600" />
+                                <SmartStatCard title={`موجودی انبار (${storeSettings.currencyConfigs[storeSettings.baseCurrency]?.name || storeSettings.baseCurrency})`} value={formatCurrency(financialPositionData.inventoryValue, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-slate-800" />
+                                <SmartStatCard title="موجودی نقد (تخمینی)" value={formatCurrency(financialPositionData.cashInHand, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-blue-700" icon={<SafeIcon />} />
+                                <SmartStatCard title={`طلب از مشتریان (${storeSettings.currencyConfigs[storeSettings.baseCurrency]?.name || storeSettings.baseCurrency})`} value={formatCurrency(financialPositionData.customerReceivables, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-slate-800" />
+                                {financialPositionData.supplierReceivables > 0 && (
+                                    <SmartStatCard title="طلب از تأمین‌کننده (بستانکاری)" value={formatCurrency(financialPositionData.supplierReceivables, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-emerald-600" />
+                                )}
+                                <SmartStatCard title="بسان‌کاری (طلب از امانات)" value={formatCurrency(financialPositionData.netDepositAsset, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-blue-600" />
+                                <SmartStatCard title="کالای نرسیده (Deferred)" value={formatCurrency(financialPositionData.deferredAssets, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-blue-600" />
                             </div>
                             <div className="space-y-4">
                                 <h3 className="font-black text-red-700 flex items-center gap-2 px-1"><div className="w-2 h-2 rounded-full bg-red-500"></div> بدهی‌ها و زیان‌ها</h3>
-                                <SmartStatCard title={`بدهی به تأمین‌کننده (${storeSettings.currencyConfigs[storeSettings.baseCurrency]?.name || storeSettings.baseCurrency})`} value={formatCurrency(financialPositionData.supplierPayables, storeSettings)} color="text-red-600" />
+                                <SmartStatCard title={`بدهی به تأمین‌کننده (${storeSettings.currencyConfigs[storeSettings.baseCurrency]?.name || storeSettings.baseCurrency})`} value={formatCurrency(financialPositionData.supplierPayables, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-red-600" />
+                                {financialPositionData.customerPayables > 0 && (
+                                    <SmartStatCard title="بدهی به مشتری (پیش‌پرداخت)" value={formatCurrency(financialPositionData.customerPayables, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-orange-600" />
+                                )}
                                 {financialPositionData.netDepositLiability > 0 && (
-                                    <SmartStatCard title="موجودی امانی (بدهی جاری)" value={formatCurrency(financialPositionData.netDepositLiability, storeSettings)} color="text-indigo-600" />
+                                    <SmartStatCard title="موجودی امانی (بدهی جاری)" value={formatCurrency(financialPositionData.netDepositLiability, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-indigo-600" />
                                 )}
                                 {financialPositionData.totalWastage > 0 && (
-                                    <SmartStatCard title="ارزش کل ضایعات (زیان)" value={formatCurrency(financialPositionData.totalWastage, storeSettings)} color="text-orange-600" icon={<ArchiveBoxXMarkIcon />} />
+                                    <SmartStatCard title="ارزش کل ضایعات (زیان)" value={formatCurrency(financialPositionData.totalWastage, storeSettings, undefined, undefined, undefined, 'en-US')} color="text-orange-600" icon={<ArchiveBoxXMarkIcon />} />
                                 )}
                                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
                                     <p className="text-[10px] font-black text-slate-400 uppercase mb-1">کل هزینه‌های انجام شده (از ابتدای کار)</p>
-                                    <p className="font-black text-slate-700 text-lg" dir="ltr">{formatCurrency(expenses.reduce((s,e)=>s+(e.amountBase || e.amount), 0), storeSettings)}</p>
+                                    <p className="font-black text-slate-700 text-xl" dir="ltr">{formatCurrency(expenses.reduce((s,e)=>s+(e.amountBase || e.amount), 0), storeSettings, undefined, undefined, undefined, 'en-US')}</p>
                                 </div>
                             </div>
                             <div className="flex flex-col justify-center">
                                 <div className="bg-gradient-to-br from-blue-600 to-indigo-800 p-8 rounded-3xl shadow-xl text-white text-center transform transition-transform hover:scale-[1.02]">
                                     <h4 className="text-blue-100 font-bold mb-4 opacity-80 uppercase tracking-widest text-xs">سرمایه خالص (Net Worth)</h4>
-                                    <p className="text-3xl md:text-4xl font-black drop-shadow-md mb-2" dir="ltr">{formatCurrency(financialPositionData.netCapital, storeSettings)}</p>
+                                    <p className="text-4xl md:text-5xl font-black drop-shadow-md mb-2" dir="ltr">{formatCurrency(financialPositionData.netCapital, storeSettings, undefined, undefined, undefined, 'en-US')}</p>
                                     <div className="w-12 h-1 bg-white/30 mx-auto rounded-full mt-4 mb-2"></div>
                                     <p className="text-[10px] text-blue-200 font-medium">ارزش واقعی کسب‌و‌کار با احتساب تمام تعهدات</p>
                                 </div>
@@ -539,7 +554,7 @@ const Reports: React.FC = () => {
                             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
                                 <h3 className="font-black text-slate-800 text-lg flex items-center gap-2"><div className="w-1.5 h-6 bg-emerald-500 rounded-full"></div> مبالغ دریافتی از مشتریان (وصولی)</h3>
                                 <div className="bg-emerald-50 px-4 py-2 rounded-full border border-emerald-100">
-                                    <span className="text-xs font-bold text-emerald-700">مجموع وصولی ({storeSettings.baseCurrency}): {formatCurrency(collectionsData.totalBase, storeSettings)}</span>
+                                    <span className="text-sm font-black text-emerald-700">مجموع وصولی ({storeSettings.baseCurrency}): {formatCurrency(collectionsData.totalBase, storeSettings, undefined, undefined, undefined, 'en-US')}</span>
                                 </div>
                             </div>
                             <div className="hidden md:block bg-white rounded-2xl border border-slate-200 overflow-hidden">
@@ -551,7 +566,7 @@ const Reports: React.FC = () => {
                                         {collectionsData.details.map(d => (
                                             <tr key={d.id} className="border-t">
                                                 <td className="p-4 font-bold text-slate-800">{d.customerName}</td>
-                                                <td className="p-4 text-emerald-600 font-black" dir="ltr">{d.amount.toLocaleString()}</td>
+                                                <td className="p-4 text-emerald-600 font-black text-xl" dir="ltr">{d.amount.toLocaleString('en-US')}</td>
                                                 <td className="p-4 font-bold text-slate-500">{d.currency}</td>
                                                 <td className="p-4 text-sm text-slate-500">{new Date(d.date).toLocaleString('fa-IR')}</td>
                                                 <td className="p-4 text-xs italic text-slate-400">{d.description}</td>

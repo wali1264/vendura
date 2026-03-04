@@ -94,6 +94,9 @@ interface AppContextType extends AppState {
     addCustomerPayment: (customerId: string, amount: number, description: string, currency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, trusteeId?: string) => Promise<CustomerTransaction | null>;
     
     addEmployee: (employee: Omit<Employee, 'id'|'balance'|'balanceAFN'|'balanceUSD'|'balanceIRT'>) => void;
+    updateEmployee: (employee: Employee) => void;
+    deleteEmployee: (id: string) => void;
+    toggleEmployeeActive: (id: string) => void;
     addEmployeeAdvance: (employeeId: string, amount: number, description: string, currency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number) => void;
     processAndPaySalaries: () => { success: boolean; message: string };
     addEmployeeAdvanceToEmployee: (employeeId: string, amount: number, description: string, currency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number) => void;
@@ -246,6 +249,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     api.updateRole(updatedAdminRole).catch(console.error);
                 }
             }
+
+            // One-time seed for the new employee requested by user (55 AFN salary)
+            // Removed as per user request to avoid test data
 
             setState(prev => {
                 const mergedSettings = (settings as StoreSettings).storeName ? { ...prev.storeSettings, ...settings } : prev.storeSettings;
@@ -1501,84 +1507,91 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return tx;
     };
 
-    const addEmployee = (e: any) => { api.addEmployee(e).then(() => fetchData(true)); };
+            // --- Employee Management ---
+            const addEmployee = (e: any) => { api.addEmployee(e).then(() => fetchData(true)); };
+            const updateEmployee = (e: Employee) => { api.updateEmployee(e).then(() => fetchData(true)); };
+            const deleteEmployee = (id: string) => { api.deleteEmployee(id).then(() => fetchData(true)); };
+            const toggleEmployeeActive = (id: string) => {
+                const emp = state.employees.find(x => x.id === id);
+                if (emp) {
+                    api.updateEmployee({ ...emp, isActive: !emp.isActive }).then(() => fetchData(true));
+                }
+            };
 
-    // FIX: Optimized and connected to Expenses for Reports/Capital integration
-    const addEmployeeAdvance = async (eid: string, a: number, d: string, cur: 'AFN' | 'USD' | 'IRT' = 'AFN', rate: number = 1) => {
-        const emp = state.employees.find(x => x.id === eid);
-        if (!emp) return;
-        const now = new Date().toISOString();
-        const tx: PayrollTransaction = { id: crypto.randomUUID(), employeeId: eid, type: 'advance', amount: a, currency: cur, exchangeRate: rate, date: now, description: d };
-        
-        const config = state.storeSettings.currencyConfigs[cur];
-        const baseAmount = cur === state.storeSettings.baseCurrency ? a : (config.method === 'multiply' ? a / rate : a * rate);
+            const addEmployeeAdvance = async (eid: string, a: number, d: string, cur: 'AFN' | 'USD' | 'IRT' = 'AFN', rate: number = 1) => {
+                const emp = state.employees.find(x => x.id === eid);
+                if (!emp) return;
+                const now = new Date().toISOString();
+                const tx: PayrollTransaction = { id: crypto.randomUUID(), employeeId: eid, type: 'advance', amount: a, currency: cur, exchangeRate: rate, date: now, description: d };
+                
+                const config = state.storeSettings.currencyConfigs[cur];
+                const baseAmount = cur === state.storeSettings.baseCurrency ? a : (config.method === 'multiply' ? a / rate : a * rate);
 
-        // Auto-log to Expenses to ensure reports are accurate
-        const expense: Expense = { 
-            id: crypto.randomUUID(), 
-            category: 'salary', 
-            amount: a, 
-            currency: cur,
-            exchangeRate: rate,
-            amountBase: baseAmount,
-            description: `مساعده/تسویه میان‌دوره به ${emp.name}: ${d}`, 
-            date: now 
-        };
-
-        const newBalances = {
-            AFN: emp.balanceAFN + (cur === 'AFN' ? a : 0),
-            USD: emp.balanceUSD + (cur === 'USD' ? a : 0),
-            IRT: emp.balanceIRT + (cur === 'IRT' ? a : 0),
-            Total: emp.balance + baseAmount
-        };
-
-        await api.processPayment('employee', eid, newBalances, tx);
-        await api.addExpense(expense);
-        await fetchData(true);
-        const currencyName = state.storeSettings.currencyConfigs[cur]?.name || cur;
-        logActivity('payroll', `ثبت مساعده/تسویه برای ${emp.name}: ${a.toLocaleString()} ${currencyName}`);
-    };
-
-    const processAndPaySalaries = () => {
-        const txs: PayrollTransaction[] = [];
-        const updates: {id: string, newBalances: any}[] = [];
-        
-        state.employees.forEach(e => {
-            // Salary is usually in base currency
-            const netBase = e.monthlySalary - e.balance;
-            if (netBase > 0) {
-                txs.push({ 
+                // Auto-log to Expenses to ensure reports are accurate
+                const expense: Expense = { 
                     id: crypto.randomUUID(), 
-                    employeeId: e.id, 
-                    type: 'salary_payment', 
-                    amount: netBase, 
-                    currency: state.storeSettings.baseCurrency,
-                    exchangeRate: 1,
-                    date: new Date().toISOString(), 
-                    description: 'تسویه حقوق ماهانه' 
+                    category: 'salary', 
+                    amount: a, 
+                    currency: cur,
+                    exchangeRate: rate,
+                    amountBase: baseAmount,
+                    description: `مساعده/تسویه میان‌دوره به ${emp.name}: ${d}`, 
+                    date: now 
+                };
+
+                // Deduction logic:
+                // We deduct from the specific currency balance if it matches, 
+                // but primarily we track the "Remaining Salary" in the employee's base salary currency.
+                const newBalances = {
+                    AFN: emp.balanceAFN - (emp.salaryCurrency === 'AFN' ? baseAmount : (cur === 'AFN' ? a : 0)),
+                    USD: emp.balanceUSD - (emp.salaryCurrency === 'USD' ? (cur === 'USD' ? a : (config.method === 'multiply' ? a / rate : a * rate)) : (cur === 'USD' ? a : 0)),
+                    IRT: emp.balanceIRT - (emp.salaryCurrency === 'IRT' ? (cur === 'IRT' ? a : (config.method === 'multiply' ? a / rate : a * rate)) : (cur === 'IRT' ? a : 0)),
+                    Total: emp.balance - baseAmount
+                };
+
+                await api.processPayment('employee', eid, newBalances, tx);
+                await api.addExpense(expense);
+                await fetchData(true);
+                const currencyName = state.storeSettings.currencyConfigs[cur]?.name || cur;
+                logActivity('payroll', `ثبت مساعده/تسویه برای ${emp.name}: ${a.toLocaleString()} ${currencyName}`);
+            };
+
+            const processAndPaySalaries = () => {
+                const txs: PayrollTransaction[] = [];
+                const updates: {id: string, newBalances: any}[] = [];
+                
+                state.employees.filter(e => e.isActive).forEach(e => {
+                    const newTotal = e.balance + e.monthlySalary;
+                    const newAFN = e.balanceAFN + (e.salaryCurrency === 'AFN' ? e.monthlySalary : 0);
+                    const newUSD = e.balanceUSD + (e.salaryCurrency === 'USD' ? e.monthlySalary : 0);
+                    const newIRT = e.balanceIRT + (e.salaryCurrency === 'IRT' ? e.monthlySalary : 0);
+                    
+                    updates.push({ 
+                        id: e.id, 
+                        newBalances: { 
+                            AFN: newAFN, 
+                            USD: newUSD, 
+                            IRT: newIRT, 
+                            Total: newTotal 
+                        } 
+                    });
+
+                    txs.push({ 
+                        id: crypto.randomUUID(), 
+                        employeeId: e.id, 
+                        type: 'salary_payment', 
+                        amount: e.monthlySalary, 
+                        currency: e.salaryCurrency,
+                        exchangeRate: 1,
+                        date: new Date().toISOString(), 
+                        description: 'افزودن حقوق ماهانه به حساب' 
+                    });
                 });
-            }
-            updates.push({ 
-                id: e.id, 
-                newBalances: { AFN: 0, USD: 0, IRT: 0, Total: 0 } 
-            });
-        });
 
-        const totalPaidBase = txs.reduce((s,t) => s + t.amount, 0);
-        const expense: Expense = { 
-            id: crypto.randomUUID(), 
-            category: 'salary', 
-            amount: totalPaidBase, 
-            currency: state.storeSettings.baseCurrency,
-            exchangeRate: 1,
-            amountBase: totalPaidBase,
-            description: 'پرداخت حقوق کارکنان (تسویه نهایی)', 
-            date: new Date().toISOString() 
-        };
-
-        api.processPayroll(updates, txs, expense).then(() => fetchData(true));
-        return { success: true, message: 'حقوق تمام کارکنان تسویه و در مصارف ثبت شد.' };
-    };
+                api.processPayroll(updates, txs, { id: 'dummy', category: 'salary', amount: 0, currency: 'AFN', exchangeRate: 1, date: new Date().toISOString(), description: 'پردازش حقوق ماهانه' }).then(() => fetchData(true));
+                logActivity('payroll', `پردازش حقوق ماهانه برای ${state.employees.length} کارمند انجام شد.`);
+                return { success: true, message: 'حقوق ماهانه به حساب تمام کارکنان فعال اضافه شد.' };
+            };
 
     const addExpense = (e: any) => { 
         const rate = e.exchangeRate || 1;
@@ -1654,7 +1667,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         beginEditSale, cancelEditSale, addSaleReturn, addPurchaseInvoice, beginEditPurchase, cancelEditPurchase, updatePurchaseInvoice, addPurchaseReturn,
         addInTransitInvoice, updateInTransitInvoice, deleteInTransitInvoice, archiveInTransitInvoice, moveInTransitItems, addInTransitPayment,
         updateSettings, addService, deleteService, addSupplier, deleteSupplier, addSupplierPayment, addCustomer, deleteCustomer, addCustomerPayment,
-        addEmployee, addEmployeeAdvance, addEmployeeAdvanceToEmployee, processAndPaySalaries, addExpense, updateExpense, deleteExpense, setInvoiceTransientCustomer,
+        addEmployee, updateEmployee, deleteEmployee, toggleEmployeeActive, addEmployeeAdvance, addEmployeeAdvanceToEmployee, processAndPaySalaries, addExpense, updateExpense, deleteExpense, setInvoiceTransientCustomer,
         addDepositHolder, deleteDepositHolder, processDepositTransaction
     }}>{children}</AppContext.Provider>;
 };

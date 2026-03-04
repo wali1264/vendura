@@ -42,7 +42,7 @@ export const parseToPackageAndUnits = (totalStock: number, itemsPerPackage: numb
     return { packages, units };
 };
 
-export const formatCurrency = (amount: number, settings: StoreSettings, customCurrencyName?: string, targetCurrency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number): string => {
+export const formatCurrency = (amount: number, settings: StoreSettings, customCurrencyName?: string, targetCurrency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, locale: string = 'fa-IR'): string => {
     const safeAmount = typeof amount === 'number' && !isNaN(amount) ? amount : 0;
     let displayAmount = safeAmount;
     let currencyName = customCurrencyName || settings?.currencyConfigs?.[settings.baseCurrency]?.name || settings?.currencyName || 'AFN';
@@ -55,16 +55,13 @@ export const formatCurrency = (amount: number, settings: StoreSettings, customCu
         }
     }
 
-    const formatted = displayAmount.toLocaleString('fa-IR', { maximumFractionDigits: 3 });
+    const formatted = displayAmount.toLocaleString(locale, { maximumFractionDigits: 3 });
     return `${formatted} ${currencyName}`;
 };
 
-export const formatBalance = (amount: number): string => {
+export const formatBalance = (amount: number, locale: string = 'fa-IR'): string => {
     const safeAmount = typeof amount === 'number' && !isNaN(amount) ? amount : 0;
-    if (safeAmount > 0) {
-        return `(${safeAmount.toLocaleString(undefined, { maximumFractionDigits: 3 })})`;
-    }
-    return Math.abs(safeAmount).toLocaleString(undefined, { maximumFractionDigits: 3 });
+    return safeAmount.toLocaleString(locale, { maximumFractionDigits: 3 });
 };
 
 export const numberToPersianWords = (num: number): string => {

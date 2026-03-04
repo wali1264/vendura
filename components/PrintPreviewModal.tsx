@@ -113,15 +113,15 @@ const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ invoice, onClose 
                         <p className="text-sm print:text-lg text-slate-800 mt-1 print:mt-2 font-bold bg-slate-100 inline-block px-4 py-1 rounded-full border">فاکتور فروش</p>
                     </div>
                     
-                    <div className="flex justify-between text-xs print:text-sm mb-2 print:mb-4 bg-slate-50 p-2 print:p-3 rounded-lg border">
-                        <div className="space-y-0.5 print:space-y-1 w-1/2">
+                    <div className="flex flex-wrap justify-between gap-2 text-xs print:text-[10px] mb-2 print:mb-4 bg-slate-50 p-2 print:p-2 rounded-lg border">
+                        <div className="space-y-0.5 print:space-y-1 w-full md:w-1/2">
                             <div className="text-sm print:text-md border-b border-slate-300 pb-1 mb-1 flex items-center flex-wrap gap-2 min-h-[24px] print:min-h-[30px]">
                                 <strong>نام مشتری:</strong> 
                                 <span className="font-bold text-base print:text-lg text-blue-800">{customCustomerName || 'مشتری گذری'}</span>
                             </div>
                             <p><strong>شماره فاکتور:</strong> <span className="font-mono font-bold">{invoice.id}</span></p>
                         </div>
-                        <div className="text-left space-y-0.5 print:space-y-1">
+                        <div className="text-left space-y-0.5 print:space-y-1 w-full md:w-auto">
                             <p><strong>تاریخ:</strong> {new Date(invoice.timestamp).toLocaleDateString('fa-IR')}</p>
                             <p><strong>ارز معامله:</strong> <span className="font-bold">{invoice.currency}</span></p>
                         </div>
@@ -131,17 +131,17 @@ const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ invoice, onClose 
                         <table className="min-w-full text-xs print:text-sm border-collapse">
                             <thead className="bg-slate-100 sticky top-0">
                                 <tr>
-                                    <th rowSpan={2} className="p-1 print:p-2 text-center font-bold border border-slate-400 w-8 print:w-10">#</th>
+                                    <th rowSpan={2} className="p-1 print:p-2 text-center font-bold border border-slate-400 w-6">#</th>
                                     <th rowSpan={2} className="p-1 print:p-2 text-right font-bold border border-slate-400">شرح کالا</th>
                                     <th colSpan={2} className="p-1 print:p-2 text-center font-bold border border-slate-400 bg-blue-50 text-blue-900">تعداد</th>
                                     <th colSpan={2} className="p-1 print:p-2 text-center font-bold border border-slate-400">قیمت (فی - {invoice.currency})</th>
-                                    <th rowSpan={2} className="p-1 print:p-2 text-center font-bold border border-slate-400 w-20 print:w-24">قیمت کل</th>
+                                    <th rowSpan={2} className="p-1 print:p-2 text-center font-bold border border-slate-400 w-16">قیمت کل</th>
                                 </tr>
                                 <tr>
-                                    <th className="p-1 text-center font-bold border border-slate-400 bg-blue-50 w-12 print:w-16">{storeSettings.packageLabel || 'بسته'}</th>
-                                    <th className="p-1 text-center font-bold border border-slate-400 bg-blue-50 w-12 print:w-16">{storeSettings.unitLabel || 'عدد'}</th>
-                                    <th className="p-1 text-center font-bold border border-slate-400 w-16 print:w-20">فی {storeSettings.packageLabel || 'بسته'}</th>
-                                    <th className="p-1 text-center font-bold border border-slate-400 w-16 print:w-20">فی {storeSettings.unitLabel || 'عدد'}</th>
+                                    <th className="p-1 text-center font-bold border border-slate-400 bg-blue-50">{storeSettings.packageLabel || 'بسته'}</th>
+                                    <th className="p-1 text-center font-bold border border-slate-400 bg-blue-50">{storeSettings.unitLabel || 'عدد'}</th>
+                                    <th className="p-1 text-center font-bold border border-slate-400">فی {storeSettings.packageLabel || 'بسته'}</th>
+                                    <th className="p-1 text-center font-bold border border-slate-400">فی {storeSettings.unitLabel || 'عدد'}</th>
                                 </tr>
                             </thead>
                             <tbody>

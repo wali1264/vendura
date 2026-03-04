@@ -195,10 +195,20 @@ export const api = {
     deleteSupplier: async (id: string) => db.deleteItem(db.STORES.SUPPLIERS, id),
     addEmployee: async (e: any) => { 
         const id = crypto.randomUUID(); 
-        const item = { ...e, id, balance: 0, balanceAFN: 0, balanceUSD: 0, balanceIRT: 0 }; 
+        const item = { 
+            ...e, 
+            id, 
+            isActive: true,
+            balance: 0, 
+            balanceAFN: 0, 
+            balanceUSD: 0, 
+            balanceIRT: 0 
+        }; 
         await db.putItem(db.STORES.EMPLOYEES, item); 
         return item; 
     },
+    updateEmployee: async (e: Employee) => db.putItem(db.STORES.EMPLOYEES, e),
+    deleteEmployee: async (id: string) => db.deleteItem(db.STORES.EMPLOYEES, id),
     addExpense: async (e: any) => { const id = crypto.randomUUID(); const item = { ...e, id }; await db.putItem(db.STORES.EXPENSES, item); return item; },
     updateExpense: async (e: Expense) => db.putItem(db.STORES.EXPENSES, e),
     deleteExpense: async (id: string) => db.deleteItem(db.STORES.EXPENSES, id),
@@ -475,7 +485,7 @@ export const api = {
             });
         }
         for (const tx of transactions) await db.putItem(db.STORES.PAYROLL_TX, tx);
-        await db.putItem(db.STORES.EXPENSES, expense);
+        if (expense && expense.amount > 0) await db.putItem(db.STORES.EXPENSES, expense);
     },
 
     clearAndRestoreData: async (data: AppState) => {

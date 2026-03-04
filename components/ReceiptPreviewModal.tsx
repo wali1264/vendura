@@ -40,7 +40,7 @@ const ReceiptPreviewModal: React.FC<ReceiptPreviewModalProps> = ({ person, trans
                         <p className="text-xs text-slate-500 font-medium">تلفن: {storeSettings.phone}</p>
                     </div>
                      <h2 className="text-xl text-center font-black mb-8 bg-slate-100 p-3 rounded-xl border border-slate-200">{title}</h2>
-                    <div className="flex justify-between text-sm mb-6 px-2">
+                    <div className="flex flex-wrap justify-between gap-2 text-sm mb-6 px-2 bg-slate-50 p-3 rounded-lg border">
                         <p className="font-bold text-slate-600">شماره رسید: <span className="font-mono text-lg text-slate-900">{transaction.id.slice(0, 8)}</span></p>
                         <p className="font-bold text-slate-600">تاریخ: <span className="text-slate-900">{new Date(transaction.date).toLocaleDateString('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' })}</span></p>
                     </div>
