@@ -441,7 +441,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
                        </div>
                     </div>
                      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                        <FormInput label="تعداد در بسته" id="itemsPerPackage" name="itemsPerPackage" type="text" inputMode="numeric" value={formData.itemsPerPackage} onChange={handleInputChange} placeholder="مثال: 12" onKeyDown={handleKeyDown} />
+                        <FormInput label={`تعداد ${storeSettings.unitLabel || 'عدد'} در هر ${storeSettings.packageLabel || 'بسته'}`} id="itemsPerPackage" name="itemsPerPackage" type="text" inputMode="numeric" value={formData.itemsPerPackage} onChange={handleInputChange} placeholder="مثال: 12" onKeyDown={handleKeyDown} />
                         <FormInput label={`موجودی (${storeSettings.packageLabel || 'بسته'})`} id="stockPackages" name="stockPackages" type="text" inputMode="numeric" value={stockPackages} onInput={(e: any) => { const v = toEnglishDigits(e.target.value).replace(/[^0-9]/g, ''); setStockPackages(v); handleStockChange(v, stockUnits); }} disabled={Number(formData.itemsPerPackage) <= 1 || !!product} onKeyDown={handleKeyDown} error={errors.stock} />
                         <FormInput label={`موجودی (${storeSettings.unitLabel || 'عدد'})`} id="stockUnits" name="stockUnits" type="text" inputMode="numeric" value={stockUnits} onInput={(e: any) => { const v = toEnglishDigits(e.target.value).replace(/[^0-9]/g, ''); setStockUnits(v); handleStockChange(stockPackages, v); }} disabled={!!product} onKeyDown={handleKeyDown} />
                     </div>
