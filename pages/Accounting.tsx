@@ -439,8 +439,8 @@ const PayrollTab = () => {
                                 </td>
                                 <td className="p-4" dir="ltr">
                                     <div className="flex flex-col items-center">
-                                        <span className={`text-2xl font-black ${e.balance > 0 ? 'text-emerald-600' : (e.balance < 0 ? 'text-red-600' : 'text-slate-400')}`}>
-                                            {e.balance.toLocaleString('en-US', {maximumFractionDigits: 2})}
+                                        <span className={`text-2xl font-black ${(e.monthlySalary + e.balance) > 0 ? 'text-emerald-600' : ((e.monthlySalary + e.balance) < 0 ? 'text-red-600' : 'text-slate-400')}`}>
+                                            {(e.monthlySalary + e.balance).toLocaleString('en-US', {maximumFractionDigits: 2})}
                                         </span>
                                         <span className="text-[10px] font-bold text-slate-400 uppercase">
                                             {storeSettings.currencyConfigs[e.salaryCurrency || 'AFN']?.name}
@@ -494,7 +494,7 @@ const PayrollTab = () => {
                             </div>
                             <div>
                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">باقیمانده</p>
-                                <p className={`font-black text-lg ${e.balance > 0 ? 'text-emerald-600' : (e.balance < 0 ? 'text-red-600' : 'text-slate-400')}`} dir="ltr">{e.balance.toLocaleString('en-US')} {storeSettings.currencyConfigs[e.salaryCurrency || 'AFN']?.name}</p>
+                                <p className={`font-black text-lg ${(e.monthlySalary + e.balance) > 0 ? 'text-emerald-600' : ((e.monthlySalary + e.balance) < 0 ? 'text-red-600' : 'text-slate-400')}`} dir="ltr">{(e.monthlySalary + e.balance).toLocaleString('en-US')} {storeSettings.currencyConfigs[e.salaryCurrency || 'AFN']?.name}</p>
                             </div>
                         </div>
                         {e.isActive && (
@@ -525,8 +525,15 @@ const PayrollTab = () => {
                             <p className="text-xs font-bold text-slate-500 mb-3">ارز پایه حقوق:</p>
                             <div className="flex gap-4">
                                 {['AFN', 'USD', 'IRT'].map(cur => (
-                                    <label key={cur} className="flex items-center gap-2 cursor-pointer">
-                                        <input type="radio" name="salaryCurrency" value={cur} defaultChecked={cur === storeSettings.baseCurrency} className="text-blue-600" />
+                                    <label key={cur} className={`flex items-center gap-2 cursor-pointer ${cur !== storeSettings.baseCurrency ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                        <input 
+                                            type="radio" 
+                                            name="salaryCurrency" 
+                                            value={cur} 
+                                            defaultChecked={cur === storeSettings.baseCurrency} 
+                                            disabled={cur !== storeSettings.baseCurrency}
+                                            className="text-blue-600" 
+                                        />
                                         <span className="text-sm font-bold text-slate-700">{storeSettings.currencyConfigs[cur as 'AFN'|'USD'|'IRT']?.name}</span>
                                     </label>
                                 ))}
@@ -550,8 +557,15 @@ const PayrollTab = () => {
                             <p className="text-xs font-bold text-slate-500 mb-3">ارز پایه حقوق:</p>
                             <div className="flex gap-4">
                                 {['AFN', 'USD', 'IRT'].map(cur => (
-                                    <label key={cur} className="flex items-center gap-2 cursor-pointer">
-                                        <input type="radio" name="salaryCurrency" value={cur} defaultChecked={cur === selectedEmployee.salaryCurrency} className="text-blue-600" />
+                                    <label key={cur} className={`flex items-center gap-2 cursor-pointer ${cur !== storeSettings.baseCurrency ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                        <input 
+                                            type="radio" 
+                                            name="salaryCurrency" 
+                                            value={cur} 
+                                            defaultChecked={cur === selectedEmployee.salaryCurrency} 
+                                            disabled={cur !== storeSettings.baseCurrency}
+                                            className="text-blue-600" 
+                                        />
                                         <span className="text-sm font-bold text-slate-700">{storeSettings.currencyConfigs[cur as 'AFN'|'USD'|'IRT']?.name}</span>
                                     </label>
                                 ))}

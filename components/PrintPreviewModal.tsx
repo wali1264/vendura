@@ -117,7 +117,17 @@ const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ invoice, onClose 
                         <div className="space-y-0.5 print:space-y-1 w-full md:w-1/2">
                             <div className="text-sm print:text-md border-b border-slate-300 pb-1 mb-1 flex items-center flex-wrap gap-2 min-h-[24px] print:min-h-[30px]">
                                 <strong>نام مشتری:</strong> 
-                                <span className="font-bold text-base print:text-lg text-blue-800">{customCustomerName || 'مشتری گذری'}</span>
+                                {isEditingName ? (
+                                    <input 
+                                        ref={inputRef}
+                                        value={customCustomerName}
+                                        onChange={(e) => setCustomCustomerName(e.target.value)}
+                                        className="border-b-2 border-blue-500 outline-none px-2 py-1 text-blue-800 font-bold bg-blue-50 rounded flex-grow max-w-[200px]"
+                                        placeholder="نام مشتری..."
+                                    />
+                                ) : (
+                                    <span className="font-bold text-base print:text-lg text-blue-800">{customCustomerName || 'مشتری گذری'}</span>
+                                )}
                             </div>
                             <p><strong>شماره فاکتور:</strong> <span className="font-mono font-bold">{invoice.id}</span></p>
                         </div>

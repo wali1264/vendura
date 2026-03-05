@@ -456,6 +456,12 @@ export const api = {
     createInTransit: async (invoice: InTransitInvoice) => db.putItem(db.STORES.IN_TRANSIT_INVOICES, invoice),
     updateInTransit: async (invoice: InTransitInvoice) => db.putItem(db.STORES.IN_TRANSIT_INVOICES, invoice),
     deleteInTransit: async (id: string) => db.deleteItem(db.STORES.IN_TRANSIT_INVOICES, id),
+    updateSaleInvoiceTransientName: async (id: string, name: string) => {
+        const inv = await db.getById<SaleInvoice>(db.STORES.SALE_INVOICES, id);
+        if (inv) {
+            await db.putItem(db.STORES.SALE_INVOICES, { ...inv, originalInvoiceId: name });
+        }
+    },
 
     processPayment: async (entityType: 'customer' | 'supplier' | 'employee', entityId: string, newBalance: any, transaction: any) => {
         const store = entityType === 'customer' ? db.STORES.CUSTOMERS : (entityType === 'supplier' ? db.STORES.SUPPLIERS : db.STORES.EMPLOYEES);

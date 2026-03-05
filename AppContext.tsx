@@ -256,7 +256,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             setState(prev => {
                 const mergedSettings = (settings as StoreSettings).storeName ? { ...prev.storeSettings, ...settings } : prev.storeSettings;
                 
-                // Ensure currencyConfigs exists for backward compatibility
+                // --- Data Migration & Patching Section ---
+                // Ensure critical settings exist for backward compatibility
                 if (!mergedSettings.currencyConfigs) {
                     mergedSettings.currencyConfigs = prev.storeSettings.currencyConfigs;
                 }
@@ -267,14 +268,52 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     mergedSettings.expenseCategories = prev.storeSettings.expenseCategories;
                 }
 
+                // Patch products if needed (e.g., ensure new fields exist)
+                const patchedProducts = products.map((p: any) => ({
+                    ...p,
+                    minStock: p.minStock ?? 0,
+                    isArchived: p.isArchived ?? false,
+                    costPrice: p.costPrice ?? 0,
+                    salePrice: p.salePrice ?? 0
+                }));
+
+                // Patch employees (ensure isActive and currency fields exist)
+                const patchedEmployees = (entities.employees || []).map((e: any) => ({
+                    ...e,
+                    isActive: e.isActive ?? true,
+                    salaryCurrency: e.salaryCurrency || mergedSettings.baseCurrency || 'AFN'
+                }));
+
+                // Patch customers/suppliers
+                const patchedCustomers = (entities.customers || []).map((c: any) => ({
+                    ...c,
+                    balance: c.balance ?? 0,
+                    balanceAFN: c.balanceAFN ?? 0,
+                    balanceUSD: c.balanceUSD ?? 0,
+                    balanceIRT: c.balanceIRT ?? 0
+                }));
+
+                const patchedSuppliers = (entities.suppliers || []).map((s: any) => ({
+                    ...s,
+                    balance: s.balance ?? 0,
+                    balanceAFN: s.balanceAFN ?? 0,
+                    balanceUSD: s.balanceUSD ?? 0,
+                    balanceIRT: s.balanceIRT ?? 0
+                }));
+
                 return {
                     ...prev,
                     storeSettings: mergedSettings,
                     users,
                     roles: roles.length > 0 ? roles : [{ id: 'admin-role', name: 'Admin', permissions: ['page:dashboard', 'page:inventory', 'page:pos', 'page:purchases', 'page:accounting', 'page:reports', 'page:settings', 'page:in_transit', 'page:deposits', 'page:orders', 'orders:create', 'orders:edit', 'orders:delete', 'orders:add_payment'] }],
-                    products, services, customers: entities.customers, suppliers: entities.suppliers,
-                    employees: entities.employees, expenses: entities.expenses,
-                    depositHolders: entities.depositHolders, depositTransactions: transactions.depositTransactions,
+                    products: patchedProducts, 
+                    services, 
+                    customers: patchedCustomers, 
+                    suppliers: patchedSuppliers,
+                    employees: patchedEmployees, 
+                    expenses: entities.expenses,
+                    depositHolders: entities.depositHolders, 
+                    depositTransactions: transactions.depositTransactions,
                     customerTransactions: transactions.customerTransactions,
                     supplierTransactions: transactions.supplierTransactions,
                     payrollTransactions: transactions.payrollTransactions,
@@ -1649,7 +1688,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return { success: true, message: 'تراکنش با موفقیت ثبت شد.' };
     };
 
-    const setInvoiceTransientCustomer = async (id: string, n: string) => {};
+    const setInvoiceTransientCustomer = async (id: string, name: string) => {
+        setState(prev => ({
+            ...prev,
+            saleInvoices: prev.saleInvoices.map(inv => 
+                inv.id === id ? { ...inv, originalInvoiceId: name } : inv
+            )
+        }));
+        await api.updateSaleInvoiceTransientName(id, name);
+    };
     const updateInTransitInvoice = (d: any) => { 
         const total = d.items.reduce((s:number, i:any) => s + (i.quantity*i.purchasePrice), 0);
         api.updateInTransit({ ...d, totalAmount: total, type: 'in_transit' } as any).then(() => fetchData(true)); 

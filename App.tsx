@@ -11,6 +11,7 @@ import Settings from './pages/Settings';
 import Login from './pages/Login';
 import Reports from './pages/Reports';
 import Orders from './pages/Orders';
+import UpdatePrompt from './components/UpdatePrompt';
 import { AppProvider, useAppContext } from './AppContext';
 import type { Permission } from './types';
 import { MenuIcon } from './components/icons';
@@ -124,6 +125,7 @@ const AuthGate: React.FC = () => {
 const App: React.FC = () => {
   return (
     <AppProvider>
+      <UpdatePrompt />
       <AuthGate />
     </AppProvider>
   );
