@@ -337,6 +337,60 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     useEffect(() => { fetchData(); }, [fetchData]);
 
+    const checkAuthorization = useCallback(async () => {
+        if (!navigator.onLine) return;
+
+        const cachedOwner = localStorage.getItem('kasebyar_user_identity');
+        if (!cachedOwner) return;
+
+        try {
+            const ownerIdentity = JSON.parse(cachedOwner);
+            const profile = await api.getProfile(ownerIdentity.id);
+            
+            if (!profile || !profile.is_approved) {
+                console.warn("Authorization revoked. Logging out...");
+                
+                if (state.currentUser?.roleId === SYSTEM_SUPER_OWNER_ID) {
+                    localStorage.setItem('kasebyar_pending_approval', 'true');
+                }
+                
+                localStorage.removeItem('kasebyar_user_identity');
+                localStorage.removeItem('kasebyar_offline_auth');
+                localStorage.removeItem('kasebyar_staff_user');
+                localStorage.setItem('kasebyar_shop_active', 'false');
+                localStorage.setItem('kasebyar_session_locked', 'true');
+                
+                setIsShopActive(false);
+                setState(prev => ({ ...prev, isAuthenticated: false, currentUser: null }));
+                
+                supabase.auth.signOut().catch(() => {});
+            }
+        } catch (e) {
+            console.error("Auth check failed:", e);
+        }
+    }, [state.currentUser]);
+
+    useEffect(() => {
+        let interval: any;
+        let initialTimeout: any;
+
+        if (isShopActive) {
+            initialTimeout = setTimeout(checkAuthorization, 5000);
+            interval = setInterval(checkAuthorization, 3600000);
+        }
+
+        return () => {
+            if (initialTimeout) clearTimeout(initialTimeout);
+            if (interval) clearInterval(interval);
+        };
+    }, [isShopActive, checkAuthorization]);
+
+    useEffect(() => {
+        const handleOnline = () => checkAuthorization();
+        window.addEventListener('online', handleOnline);
+        return () => window.removeEventListener('online', handleOnline);
+    }, [checkAuthorization]);
+
     const logActivity = useCallback(async (type: ActivityLog['type'], description: string, refId?: string, refType?: ActivityLog['refType']) => {
         if (!state.currentUser) return;
         const displayName = state.currentUser.roleId === SYSTEM_SUPER_OWNER_ID ? 'صاحب فروشگاه' : state.currentUser.username;

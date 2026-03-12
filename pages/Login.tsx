@@ -19,6 +19,13 @@ const Login: React.FC = () => {
         if (isShopActive && loginType === 'staff') setError('');
     }, [isShopActive, loginType]);
 
+    useEffect(() => {
+        if (localStorage.getItem('kasebyar_pending_approval') === 'true') {
+            setIsPending(true);
+            localStorage.removeItem('kasebyar_pending_approval');
+        }
+    }, []);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (isSubmitting) return;
