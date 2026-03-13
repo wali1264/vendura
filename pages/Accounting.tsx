@@ -82,10 +82,16 @@ const SuppliersTab = () => {
         } : undefined;
 
         if (editingSupplier) {
-            const { updateSupplier } = useAppContext(); // Get from context if needed, but it's already in scope if we destructure it
-            // Wait, I need to destructure updateSupplier from useAppContext() at the top of the component
-            // I'll do that in a separate chunk
-            await updateSupplier({ ...editingSupplier, ...supplierData }, initialBalance);
+            const updatedSupplier = { 
+                ...editingSupplier, 
+                ...supplierData,
+                initialBalance: initialAmount,
+                initialBalanceCurrency: addSupplierCurrency,
+                initialBalanceExchangeRate: addSupplierCurrency === baseCurrency ? 1 : Number(addSupplierRate),
+                initialBalanceDate: addSupplierDate,
+                initialBalanceDescription: addSupplierDescription
+            };
+            await updateSupplier(updatedSupplier, initialBalance);
             showToast("اطلاعات تأمین‌کننده با موفقیت بروزرسانی شد.");
         } else {
             addSupplier(supplierData, initialBalance);
@@ -737,7 +743,16 @@ const CustomersTab = () => {
         } : undefined;
 
         if (editingCustomer) {
-            await updateCustomer({ ...editingCustomer, ...customerData }, initialBalance);
+            const updatedCustomer = {
+                ...editingCustomer,
+                ...customerData,
+                initialBalance: initialAmount,
+                initialBalanceCurrency: addCustomerCurrency,
+                initialBalanceExchangeRate: addCustomerCurrency === baseCurrency ? 1 : Number(addCustomerRate),
+                initialBalanceDate: addCustomerDate,
+                initialBalanceDescription: addCustomerDescription
+            };
+            await updateCustomer(updatedCustomer, initialBalance);
             showToast("اطلاعات مشتری با موفقیت بروزرسانی شد.");
         } else {
             addCustomer(customerData, initialBalance);
