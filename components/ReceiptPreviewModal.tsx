@@ -25,10 +25,7 @@ const ReceiptPreviewModal: React.FC<ReceiptPreviewModalProps> = ({ person, trans
 
     // Identify the specific currency of the transaction
     const transactionCurrency = (transaction as any).currency || 'AFN';
-    const displayCurrencyName = 
-        transactionCurrency === 'USD' ? 'دلار' : 
-        transactionCurrency === 'IRT' ? 'تومان' : 
-        storeSettings.currencyName;
+    const displayCurrencyName = storeSettings.currencyConfigs[transactionCurrency as 'AFN'|'USD'|'IRT']?.name || transactionCurrency;
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center z-[120] p-4 md:pt-20 overflow-y-auto">
