@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import type { Supplier, Customer, Employee, AnyTransaction, PayrollTransaction } from '../types';
-import { XIcon, PrintIcon } from './icons';
+import { XIcon, PrintIcon, EditIcon, TrashIcon } from './icons';
 import { useAppContext } from '../AppContext';
-import { formatCurrency, formatBalance } from '../utils/formatters';
+import { formatCurrency, formatBalance, toEnglishDigits } from '../utils/formatters';
 import DateRangeFilter from './DateRangeFilter';
 import ReportPrintPreviewModal from './ReportPrintPreviewModal';
+import JalaliDateInput from './JalaliDateInput';
 
 interface TransactionHistoryModalProps {
     person: Supplier | Customer | Employee;
@@ -15,9 +16,15 @@ interface TransactionHistoryModalProps {
 }
 
 const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ person, transactions, type, onClose, onReprint }) => {
-    const { storeSettings } = useAppContext();
+    const { storeSettings, updateCustomerTransaction, deleteCustomerTransaction, updateSupplierTransaction, deleteSupplierTransaction } = useAppContext();
     const [dateRange, setDateRange] = useState<{ start: Date, end: Date }>({ start: new Date(), end: new Date() });
     const [isPrintPreviewOpen, setIsPrintPreviewOpen] = useState(false);
+    const [editingTransaction, setEditingTransaction] = useState<any>(null);
+    const [editAmount, setEditAmount] = useState('');
+    const [editDescription, setEditDescription] = useState('');
+    const [editDate, setEditDate] = useState('');
+    const [editCurrency, setEditCurrency] = useState<'AFN'|'USD'|'IRT'>('AFN');
+    const [editRate, setEditRate] = useState('');
 
     // Safety check
     if (!person) return null;
@@ -76,6 +83,44 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
     }, [filteredTransactions, type]);
 
 
+    const handleEditClick = (t: any) => {
+        setEditingTransaction(t);
+        setEditAmount(t.amount.toString());
+        setEditDescription(t.description);
+        setEditDate(t.date.split('T')[0]);
+        setEditCurrency(t.currency || 'AFN');
+        setEditRate(t.exchangeRate?.toString() || '');
+    };
+
+    const handleSaveEdit = async () => {
+        if (!editingTransaction) return;
+        const updatedTx = {
+            ...editingTransaction,
+            amount: Number(editAmount),
+            description: editDescription,
+            date: new Date(editDate).toISOString(),
+            currency: editCurrency,
+            exchangeRate: editCurrency === storeSettings.baseCurrency ? 1 : Number(editRate)
+        };
+
+        if (type === 'customer') {
+            await updateCustomerTransaction(updatedTx);
+        } else if (type === 'supplier') {
+            await updateSupplierTransaction(updatedTx);
+        }
+        setEditingTransaction(null);
+    };
+
+    const handleDeleteClick = async (t: any) => {
+        if (!window.confirm('آیا از حذف این تراکنش اطمینان دارید؟ این عمل باعث تغییر در مانده حساب می‌شود.')) return;
+        
+        if (type === 'customer') {
+            await deleteCustomerTransaction(t.id);
+        } else if (type === 'supplier') {
+            await deleteSupplierTransaction(t.id);
+        }
+    };
+
     const transactionTable = (
         <table className="min-w-full text-center responsive-table border-collapse">
             <thead className="bg-slate-100 sticky top-0 z-10 shadow-sm">
@@ -116,11 +161,23 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
                             <td data-label="بدهکار" className="p-3 text-blue-600 font-bold text-xl" dir="ltr">{debit > 0 ? `${debit.toLocaleString('en-US')} ${curSuffix}` : '-'}</td>
                             <td data-label="بستانکار" className="p-3 text-red-600 font-bold text-xl" dir="ltr">{credit > 0 ? `${credit.toLocaleString('en-US')} ${curSuffix}` : '-'}</td>
                             <td className="p-3 actions-cell">
-                                {(t.type === 'payment' || t.type === 'receipt') && (
-                                    <button onClick={() => onReprint(t.id)} className="p-2 rounded-full text-gray-500 hover:text-green-600 hover:bg-green-100 transition-colors" title="چاپ مجدد رسید">
-                                        <PrintIcon className="w-5 h-5" />
-                                    </button>
-                                )}
+                                <div className="flex items-center gap-1 justify-center">
+                                    {(t.type === 'payment' || t.type === 'receipt') && (
+                                        <button onClick={() => onReprint(t.id)} className="p-2 rounded-full text-gray-500 hover:text-green-600 hover:bg-green-100 transition-colors" title="چاپ مجدد رسید">
+                                            <PrintIcon className="w-5 h-5" />
+                                        </button>
+                                    )}
+                                    {(t as any).isManual && !t.isInitial && (
+                                        <>
+                                            <button onClick={() => handleEditClick(t)} className="p-2 rounded-full text-blue-500 hover:text-blue-700 hover:bg-blue-100 transition-colors" title="ویرایش">
+                                                <EditIcon className="w-5 h-5" />
+                                            </button>
+                                            <button onClick={() => handleDeleteClick(t)} className="p-2 rounded-full text-red-500 hover:text-red-700 hover:bg-red-100 transition-colors" title="حذف">
+                                                <TrashIcon className="w-5 h-5" />
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
                             </td>
                         </tr>
                     );
@@ -210,6 +267,38 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
                         )}
                     </div>
                 </ReportPrintPreviewModal>
+            )}
+
+            {editingTransaction && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[150] p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-md overflow-hidden">
+                        <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50">
+                            <h2 className="text-lg font-bold text-slate-800">ویرایش تراکنش</h2>
+                            <button onClick={() => setEditingTransaction(null)} className="p-1 rounded-full text-slate-500 hover:bg-red-100 hover:text-red-600 transition-colors"><XIcon className="w-6 h-6" /></button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold text-slate-500">تاریخ:</label>
+                                <JalaliDateInput value={editDate} onChange={setEditDate} disableRestriction />
+                            </div>
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold text-slate-500">مبلغ ({editCurrency}):</label>
+                                <input type="text" inputMode="decimal" value={editAmount} onChange={e => setEditAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} className="w-full p-3 border border-slate-200 rounded-xl font-bold text-lg" />
+                            </div>
+                            {editCurrency !== storeSettings.baseCurrency && (
+                                <div className="space-y-1">
+                                    <label className="text-xs font-bold text-slate-500">نرخ تبدیل:</label>
+                                    <input type="text" inputMode="decimal" value={editRate} onChange={e => setEditRate(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} className="w-full p-3 border border-slate-200 rounded-xl font-mono" />
+                                </div>
+                            )}
+                            <div className="space-y-1">
+                                <label className="text-xs font-bold text-slate-500">شرح:</label>
+                                <textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} className="w-full p-3 border border-slate-200 rounded-xl h-24 resize-none" />
+                            </div>
+                            <button onClick={handleSaveEdit} className="w-full bg-blue-600 text-white p-4 rounded-xl font-black text-lg shadow-lg hover:bg-blue-700 transition-all">ذخیره تغییرات</button>
+                        </div>
+                    </div>
+                </div>
             )}
         </>
     );

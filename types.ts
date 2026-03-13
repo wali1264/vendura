@@ -168,6 +168,11 @@ export interface Supplier {
     balanceAFN: number; // Precise AFN balance
     balanceUSD: number; // Precise USD balance
     balanceIRT: number; // Precise IRT balance (New)
+    initialBalanceDate?: string;
+    initialBalanceDescription?: string;
+    initialBalance?: number;
+    initialBalanceCurrency?: 'AFN' | 'USD' | 'IRT';
+    initialBalanceExchangeRate?: number;
 }
 
 export interface SupplierTransaction {
@@ -181,6 +186,8 @@ export interface SupplierTransaction {
     currency?: 'AFN' | 'USD' | 'IRT'; // Track specific currency
     exchangeRate?: number; // Rate to base currency at time of transaction
     isCash?: boolean; // NEW: To distinguish physical cash from intermediary settlements
+    isManual?: boolean;
+    isInitial?: boolean;
 }
 
 
@@ -219,6 +226,11 @@ export interface Customer {
     balanceAFN: number; // Positive means they owe us AFN
     balanceUSD: number; // Positive means they owe us USD
     balanceIRT: number; // Positive means they owe us IRT
+    initialBalanceDate?: string;
+    initialBalanceDescription?: string;
+    initialBalance?: number;
+    initialBalanceCurrency?: 'AFN' | 'USD' | 'IRT';
+    initialBalanceExchangeRate?: number;
 }
 
 export interface CustomerTransaction {
@@ -232,6 +244,8 @@ export interface CustomerTransaction {
     currency?: 'AFN' | 'USD' | 'IRT'; // Added currency tracking
     exchangeRate?: number; // Rate to base currency at time of transaction
     isCash?: boolean; // NEW: To distinguish physical cash from intermediary settlements
+    isManual?: boolean;
+    isInitial?: boolean;
 }
 
 export type AnyTransaction = CustomerTransaction | SupplierTransaction | PayrollTransaction | DepositTransaction;

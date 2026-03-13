@@ -25,11 +25,12 @@ const Modal: React.FC<{ title: string, onClose: () => void, children: React.Reac
 );
 
 const SuppliersTab = () => {
-    const { suppliers, addSupplier, deleteSupplier, addSupplierPayment, supplierTransactions, storeSettings, inTransitInvoices } = useAppContext();
+    const { suppliers, addSupplier, updateSupplier, deleteSupplier, addSupplierPayment, supplierTransactions, storeSettings, inTransitInvoices } = useAppContext();
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isPayModalOpen, setIsPayModalOpen] = useState(false);
     const [transactionType, setTransactionType] = useState<'payment' | 'receipt'>('payment');
     const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+    const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
     const [toast, setToast] = useState('');
     const [historyModalData, setHistoryModalData] = useState<{ person: Supplier, transactions: SupplierTransaction[] } | null>(null);
     const [receiptModalData, setReceiptModalData] = useState<{ person: Supplier, transaction: SupplierTransaction } | null>(null);
@@ -40,6 +41,8 @@ const SuppliersTab = () => {
     const [addSupplierCurrency, setAddSupplierCurrency] = useState<'AFN' | 'USD' | 'IRT'>(baseCurrency);
     const [addSupplierRate, setAddSupplierRate] = useState('');
     const [addSupplierAmount, setAddSupplierAmount] = useState('');
+    const [addSupplierDate, setAddSupplierDate] = useState(new Date().toISOString().split('T')[0]);
+    const [addSupplierDescription, setAddSupplierDescription] = useState('');
 
     const [paymentCurrency, setPaymentCurrency] = useState<'AFN' | 'USD' | 'IRT'>(baseCurrency);
     const [exchangeRate, setExchangeRate] = useState('');
@@ -56,14 +59,46 @@ const SuppliersTab = () => {
         }, 0);
     }, [inTransitInvoices]);
 
-    const handleAddSupplierForm = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleAddSupplierForm = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const formData = new FormData(e.currentTarget);
         const initialAmount = Number(addSupplierAmount);
         const initialType = formData.get('balanceType') as 'creditor' | 'debtor';
         if (addSupplierCurrency !== baseCurrency && initialAmount > 0 && (!addSupplierRate || Number(addSupplierRate) <= 0)) { showToast("لطفا نرخ ارز را وارد کنید."); return; }
-        addSupplier({ name: formData.get('name') as string, contactPerson: formData.get('contactPerson') as string, phone: formData.get('phone') as string, }, initialAmount > 0 ? { amount: initialAmount, type: initialType, currency: addSupplierCurrency, exchangeRate: addSupplierCurrency === baseCurrency ? 1 : Number(addSupplierRate) } : undefined);
-        setAddSupplierCurrency(baseCurrency); setAddSupplierRate(''); setAddSupplierAmount(''); setIsAddModalOpen(false);
+        
+        const supplierData = { 
+            name: formData.get('name') as string, 
+            contactPerson: formData.get('contactPerson') as string, 
+            phone: formData.get('phone') as string, 
+        };
+
+        const initialBalance = initialAmount > 0 ? { 
+            amount: initialAmount, 
+            type: initialType, 
+            currency: addSupplierCurrency, 
+            exchangeRate: addSupplierCurrency === baseCurrency ? 1 : Number(addSupplierRate),
+            date: addSupplierDate,
+            description: addSupplierDescription
+        } : undefined;
+
+        if (editingSupplier) {
+            const { updateSupplier } = useAppContext(); // Get from context if needed, but it's already in scope if we destructure it
+            // Wait, I need to destructure updateSupplier from useAppContext() at the top of the component
+            // I'll do that in a separate chunk
+            await updateSupplier({ ...editingSupplier, ...supplierData }, initialBalance);
+            showToast("اطلاعات تأمین‌کننده با موفقیت بروزرسانی شد.");
+        } else {
+            addSupplier(supplierData, initialBalance);
+            showToast("تأمین‌کننده جدید با موفقیت ثبت شد.");
+        }
+
+        setAddSupplierCurrency(baseCurrency); 
+        setAddSupplierRate(''); 
+        setAddSupplierAmount(''); 
+        setAddSupplierDate(new Date().toISOString().split('T')[0]); 
+        setAddSupplierDescription(''); 
+        setEditingSupplier(null);
+        setIsAddModalOpen(false);
     };
     
     const handleDelete = (supplier: Supplier) => {
@@ -172,6 +207,15 @@ const SuppliersTab = () => {
                                 </td>
                                 <td className="p-4">
                                     <div className="flex justify-center items-center gap-2">
+                                        <button onClick={() => {
+                                            setEditingSupplier(s);
+                                            setAddSupplierAmount(Math.abs(s.initialBalance || 0).toString());
+                                            setAddSupplierCurrency(s.initialBalanceCurrency || baseCurrency);
+                                            setAddSupplierRate(s.initialBalanceExchangeRate?.toString() || '');
+                                            setAddSupplierDate(s.initialBalanceDate || new Date().toISOString().split('T')[0]);
+                                            setAddSupplierDescription(s.initialBalanceDescription || '');
+                                            setIsAddModalOpen(true);
+                                        }} className="p-2.5 rounded-xl text-blue-500 hover:text-blue-600 hover:bg-blue-100 transition-all" title="ویرایش اطلاعات"><EditIcon className="w-6 h-6"/></button>
                                         <button onClick={() => handleViewHistory(s)} className="p-2.5 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-blue-100 transition-all" title="مشاهده صورت حساب"><EyeIcon className="w-6 h-6"/></button>
                                         <button onClick={() => handleDelete(s)} className={`p-2.5 rounded-xl transition-all ${(Math.abs(s.balanceAFN || 0) === 0 && Math.abs(s.balanceUSD || 0) === 0 && Math.abs(s.balanceIRT || 0) === 0) ? 'text-red-500 hover:bg-red-50 cursor-pointer' : 'text-slate-300 cursor-not-allowed'}`} disabled={Math.abs(s.balanceAFN || 0) > 0 || Math.abs(s.balanceUSD || 0) > 0 || Math.abs(s.balanceIRT || 0) > 0}><TrashIcon className="w-6 h-6" /></button>
                                         <div className="flex flex-col gap-1">
@@ -223,11 +267,11 @@ const SuppliersTab = () => {
             </div>
 
             {isAddModalOpen && (
-                <Modal title="افزودن تأمین‌کننده جدید" onClose={() => setIsAddModalOpen(false)}>
+                <Modal title={editingSupplier ? "ویرایش تأمین‌کننده" : "افزودن تأمین‌کننده جدید"} onClose={() => { setIsAddModalOpen(false); setEditingSupplier(null); }}>
                     <form onSubmit={handleAddSupplierForm} className="space-y-4">
-                        <input name="name" placeholder="نام تأمین‌کننده" className="w-full p-3.5 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-50 outline-none transition-all" required/>
-                        <input name="contactPerson" placeholder="فرد مسئول" className="w-full p-3.5 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-50 outline-none transition-all" />
-                        <input name="phone" placeholder="شماره تلفن" className="w-full p-3.5 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-50 outline-none transition-all" dir="ltr" />
+                        <input name="name" defaultValue={editingSupplier?.name} placeholder="نام تأمین‌کننده" className="w-full p-3.5 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-50 outline-none transition-all" required/>
+                        <input name="contactPerson" defaultValue={editingSupplier?.contactPerson} placeholder="فرد مسئول" className="w-full p-3.5 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-50 outline-none transition-all" />
+                        <input name="phone" defaultValue={editingSupplier?.phone} placeholder="شماره تلفن" className="w-full p-3.5 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-50 outline-none transition-all" dir="ltr" />
                         <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 space-y-4">
                             <p className="text-sm font-black text-blue-800">تراز اول دوره (اختیاری)</p>
                             <div className="flex gap-4">
@@ -243,10 +287,21 @@ const SuppliersTab = () => {
                                     <input type="text" inputMode="decimal" value={addSupplierRate} onChange={e => setAddSupplierRate(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} placeholder="نرخ" className="w-full p-2.5 border border-slate-200 rounded-xl font-mono text-center outline-none" />
                                 </div>
                             )}
-                            <div className="flex gap-2"><input name="initialBalance" type="text" inputMode="decimal" value={addSupplierAmount} onChange={e => setAddSupplierAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} placeholder="مبلغ" className="w-2/3 p-2.5 border border-slate-200 rounded-xl outline-none" /><select name="balanceType" className="w-1/3 p-2.5 border border-slate-200 rounded-xl bg-white text-xs font-bold"><option value="creditor">ما بدهکاریم</option><option value="debtor">او بدهکار است</option></select></div>
+                            <div className="flex gap-2">
+                                <input name="initialBalance" type="text" inputMode="decimal" value={addSupplierAmount} onChange={e => setAddSupplierAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} placeholder="مبلغ" className="w-2/3 p-2.5 border border-slate-200 rounded-xl outline-none" />
+                                <select name="balanceType" defaultValue={editingSupplier ? (editingSupplier.initialBalance && editingSupplier.initialBalance > 0 ? 'creditor' : 'debtor') : 'creditor'} className="w-1/3 p-2.5 border border-slate-200 rounded-xl bg-white text-xs font-bold">
+                                    <option value="creditor">ما بدهکاریم</option>
+                                    <option value="debtor">او بدهکار است</option>
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-500">تاریخ تراز:</label>
+                                <JalaliDateInput value={addSupplierDate} onChange={setAddSupplierDate} disableRestriction />
+                            </div>
+                            <textarea value={addSupplierDescription} onChange={e => setAddSupplierDescription(e.target.value)} placeholder="توضیحات تراز (مثلاً: بابت فاکتورهای سال قبل)" className="w-full p-3 border border-slate-200 rounded-xl text-sm h-20 resize-none" />
                             {addSupplierCurrency !== baseCurrency && convertedInitialBalance > 0 && <p className="text-[10px] font-black text-blue-600 text-left">معادل تقریبی: {convertedInitialBalance < 1 ? convertedInitialBalance.toFixed(4) : convertedInitialBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })} {baseCurrencyName}</p>}
                         </div>
-                        <button type="submit" className="w-full bg-blue-600 text-white p-4 rounded-xl shadow-xl hover:bg-blue-700 transition-all font-black text-lg">ذخیره نهایی</button>
+                        <button type="submit" className="w-full bg-blue-600 text-white p-4 rounded-xl shadow-xl hover:bg-blue-700 transition-all font-black text-lg">{editingSupplier ? 'بروزرسانی اطلاعات' : 'ذخیره نهایی'}</button>
                     </form>
                 </Modal>
             )}
@@ -269,7 +324,7 @@ const SuppliersTab = () => {
                         )}
                         <div className="flex items-center gap-3">
                             <span className="text-xs whitespace-nowrap font-bold text-slate-400">تاریخ تراکنش:</span>
-                            <JalaliDateInput value={transactionDate} onChange={setTransactionDate} />
+                            <JalaliDateInput value={transactionDate} onChange={setTransactionDate} disableRestriction />
                             <input type="hidden" name="transactionDate" value={transactionDate} />
                         </div>
                         <input name="amount" type="text" inputMode="decimal" value={paymentAmount} onChange={e => setPaymentAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} placeholder={`مبلغ (${paymentCurrency})`} className="w-full p-4 border border-slate-200 rounded-xl font-bold text-center text-xl" required />
@@ -615,11 +670,12 @@ const PayrollTab = () => {
 };
 
 const CustomersTab = () => {
-    const { customers, depositHolders, addCustomer, deleteCustomer, addCustomerPayment, customerTransactions, storeSettings } = useAppContext();
+    const { customers, depositHolders, addCustomer, updateCustomer, deleteCustomer, addCustomerPayment, customerTransactions, storeSettings } = useAppContext();
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isPayModalOpen, setIsPayModalOpen] = useState(false);
     const [transactionType, setTransactionType] = useState<'payment' | 'receipt'>('payment');
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+    const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
     const [toast, setToast] = useState('');
     const [historyModalData, setHistoryModalData] = useState<{ person: Customer, transactions: CustomerTransaction[] } | null>(null);
     const [receiptModalData, setReceiptModalData] = useState<{ person: Customer, transaction: CustomerTransaction } | null>(null);
@@ -631,6 +687,8 @@ const CustomersTab = () => {
     const [addCustomerCurrency, setAddCustomerCurrency] = useState<'AFN' | 'USD' | 'IRT'>(baseCurrency);
     const [addCustomerRate, setAddCustomerRate] = useState('');
     const [addCustomerAmount, setAddCustomerAmount] = useState('');
+    const [addCustomerDate, setAddCustomerDate] = useState(new Date().toISOString().split('T')[0]);
+    const [addCustomerDescription, setAddCustomerDescription] = useState('');
 
     // Payment State
     const [paymentCurrency, setPaymentCurrency] = useState<'AFN' | 'USD' | 'IRT'>(baseCurrency);
@@ -653,7 +711,7 @@ const CustomersTab = () => {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const handleAddCustomerForm = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleAddCustomerForm = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
         const formData = new FormData(e.currentTarget);
         const initialAmount = Number(addCustomerAmount);
@@ -664,19 +722,34 @@ const CustomersTab = () => {
             return;
         }
 
-        addCustomer({
+        const customerData = {
             name: formData.get('name') as string,
             phone: formData.get('phone') as string,
-        }, initialAmount > 0 ? { 
+        };
+
+        const initialBalance = initialAmount > 0 ? { 
             amount: initialAmount, 
             type: initialType,
             currency: addCustomerCurrency,
-            exchangeRate: addCustomerCurrency === baseCurrency ? 1 : Number(addCustomerRate)
-        } : undefined);
+            exchangeRate: addCustomerCurrency === baseCurrency ? 1 : Number(addCustomerRate),
+            date: addCustomerDate,
+            description: addCustomerDescription
+        } : undefined;
+
+        if (editingCustomer) {
+            await updateCustomer({ ...editingCustomer, ...customerData }, initialBalance);
+            showToast("اطلاعات مشتری با موفقیت بروزرسانی شد.");
+        } else {
+            addCustomer(customerData, initialBalance);
+            showToast("مشتری جدید با موفقیت ثبت شد.");
+        }
         
         setAddCustomerCurrency(baseCurrency);
         setAddCustomerRate('');
         setAddCustomerAmount('');
+        setAddCustomerDate(new Date().toISOString().split('T')[0]);
+        setAddCustomerDescription('');
+        setEditingCustomer(null);
         setIsAddModalOpen(false);
     };
 
@@ -812,6 +885,15 @@ const CustomersTab = () => {
                                 </td>
                                 <td className="p-4">
                                      <div className="flex justify-center items-center gap-2">
+                                        <button onClick={() => {
+                                            setEditingCustomer(c);
+                                            setAddCustomerAmount(Math.abs(c.initialBalance || 0).toString());
+                                            setAddCustomerCurrency(c.initialBalanceCurrency || baseCurrency);
+                                            setAddCustomerRate(c.initialBalanceExchangeRate?.toString() || '');
+                                            setAddCustomerDate(c.initialBalanceDate || new Date().toISOString().split('T')[0]);
+                                            setAddCustomerDescription(c.initialBalanceDescription || '');
+                                            setIsAddModalOpen(true);
+                                        }} className="p-2.5 rounded-xl text-blue-500 hover:text-blue-600 hover:bg-blue-100 transition-all" title="ویرایش اطلاعات"><EditIcon className="w-6 h-6"/></button>
                                         <button onClick={() => handleViewHistory(c)} className="p-2.5 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-blue-100 transition-all" title="مشاهده صورت حساب"><EyeIcon className="w-6 h-6"/></button>
                                         <button 
                                             onClick={() => handleDelete(c)} 
@@ -842,6 +924,15 @@ const CustomersTab = () => {
                                 <p className="text-xs text-slate-400 font-medium">{c.phone || 'بدون شماره'}</p>
                            </div>
                            <div className="flex gap-2">
+                               <button onClick={() => {
+                                   setEditingCustomer(c);
+                                   setAddCustomerAmount(Math.abs(c.initialBalance || 0).toString());
+                                   setAddCustomerCurrency(c.initialBalanceCurrency || baseCurrency);
+                                   setAddCustomerRate(c.initialBalanceExchangeRate?.toString() || '');
+                                   setAddCustomerDate(c.initialBalanceDate || new Date().toISOString().split('T')[0]);
+                                   setAddCustomerDescription(c.initialBalanceDescription || '');
+                                   setIsAddModalOpen(true);
+                               }} className="p-2.5 bg-slate-100 rounded-xl text-blue-600 active:bg-blue-100"><EditIcon className="w-5 h-5" /></button>
                                <button onClick={() => handleViewHistory(c)} className="p-2.5 bg-slate-100 rounded-xl text-slate-600 active:bg-blue-100"><EyeIcon className="w-5 h-5" /></button>
                                <button 
                                     onClick={() => handleDelete(c)} 
@@ -880,10 +971,10 @@ const CustomersTab = () => {
             </div>
 
             {isAddModalOpen && (
-                <Modal title="افزودن مشتری جدید" onClose={() => setIsAddModalOpen(false)}>
+                <Modal title={editingCustomer ? "ویرایش مشتری" : "افزودن مشتری جدید"} onClose={() => { setIsAddModalOpen(false); setEditingCustomer(null); }}>
                     <form onSubmit={handleAddCustomerForm} className="space-y-4">
-                        <input name="name" placeholder="نام مشتری" className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50" required/>
-                        <input name="phone" placeholder="شماره تلفن" className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50" />
+                        <input name="name" defaultValue={editingCustomer?.name} placeholder="نام مشتری" className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50" required/>
+                        <input name="phone" defaultValue={editingCustomer?.phone} placeholder="شماره تلفن" className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50" />
                         <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 space-y-4">
                             <p className="text-sm font-black text-blue-800">تراز اول دوره (اختیاری)</p>
                             <div className="flex gap-4">
@@ -913,16 +1004,21 @@ const CustomersTab = () => {
                             )}
                             <div className="flex gap-2">
                                 <input name="initialBalance" type="text" inputMode="decimal" value={addCustomerAmount} onChange={e => setAddCustomerAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} placeholder={`مبلغ (${addCustomerCurrency})`} className="w-2/3 p-2.5 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-50 font-bold" />
-                                <select name="balanceType" className="w-1/3 p-2.5 border border-slate-200 rounded-xl bg-white text-xs font-black">
+                                <select name="balanceType" defaultValue={editingCustomer ? (editingCustomer.initialBalance && editingCustomer.initialBalance > 0 ? 'debtor' : 'creditor') : 'debtor'} className="w-1/3 p-2.5 border border-slate-200 rounded-xl bg-white text-xs font-black">
                                     <option value="debtor">بدهکار است</option>
                                     <option value="creditor">بستانکار است</option>
                                 </select>
                             </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-slate-500">تاریخ تراز:</label>
+                                <JalaliDateInput value={addCustomerDate} onChange={setAddCustomerDate} disableRestriction />
+                            </div>
+                            <textarea value={addCustomerDescription} onChange={e => setAddCustomerDescription(e.target.value)} placeholder="توضیحات تراز (مثلاً: بابت فاکتورهای سال قبل)" className="w-full p-3 border border-slate-200 rounded-xl text-sm h-20 resize-none" />
                             {addCustomerCurrency !== baseCurrency && convertedInitialBalance > 0 && (
                                 <p className="text-[10px] font-black text-blue-600 text-left">معادل تقریبی: {convertedInitialBalance < 1 ? convertedInitialBalance.toFixed(4) : convertedInitialBalance.toLocaleString(undefined, { maximumFractionDigits: 2 })} {baseCurrencyName}</p>
                             )}
                         </div>
-                        <button type="submit" className="w-full bg-blue-600 text-white p-4 rounded-xl shadow-xl shadow-blue-100 font-black text-lg">ذخیره مشتری</button>
+                        <button type="submit" className="w-full bg-blue-600 text-white p-4 rounded-xl shadow-xl shadow-blue-100 font-black text-lg">{editingCustomer ? 'بروزرسانی اطلاعات' : 'ذخیره مشتری'}</button>
                     </form>
                 </Modal>
             )}
@@ -1005,7 +1101,7 @@ const CustomersTab = () => {
                         )}
                         <div className="flex items-center gap-3">
                             <span className="text-xs whitespace-nowrap font-bold text-slate-400">تاریخ تراکنش:</span>
-                            <JalaliDateInput value={transactionDate} onChange={setTransactionDate} />
+                            <JalaliDateInput value={transactionDate} onChange={setTransactionDate} disableRestriction />
                             <input type="hidden" name="transactionDate" value={transactionDate} />
                         </div>
                         <input name="amount" type="text" inputMode="decimal" value={paymentAmount} onChange={e => setPaymentAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} placeholder={`${transactionType === 'payment' ? 'مبلغ دریافتی' : 'مبلغ پرداختی'} (${paymentCurrency})`} className={`w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 ${transactionType === 'payment' ? 'focus:ring-emerald-50' : 'focus:ring-red-50'} font-black text-xl text-center`} required />

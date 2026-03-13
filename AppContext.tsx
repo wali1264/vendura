@@ -85,13 +85,19 @@ interface AppContextType extends AppState {
     deleteService: (serviceId: string) => void;
     
     // Accounting
-    addSupplier: (supplier: Omit<Supplier, 'id' | 'balance' | 'balanceAFN' | 'balanceUSD' | 'balanceIRT'>, initialBalance?: { amount: number, type: 'creditor' | 'debtor', currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number }) => void;
+    addSupplier: (supplier: Omit<Supplier, 'id' | 'balance' | 'balanceAFN' | 'balanceUSD' | 'balanceIRT'>, initialBalance?: { amount: number, type: 'creditor' | 'debtor', currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => void;
+    updateSupplier: (supplier: Supplier, initialBalance?: { amount: number, type: 'creditor' | 'debtor', currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => Promise<void>;
     deleteSupplier: (id: string) => void;
     addSupplierPayment: (supplierId: string, amount: number, description: string, currency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, type?: 'payment' | 'receipt', customDate?: string) => Promise<SupplierTransaction>;
+    updateSupplierTransaction: (transaction: SupplierTransaction) => Promise<void>;
+    deleteSupplierTransaction: (transactionId: string) => Promise<void>;
     
-    addCustomer: (customer: Omit<Customer, 'id' | 'balance' | 'balanceAFN' | 'balanceUSD' | 'balanceIRT'>, initialBalance?: { amount: number, type: 'creditor' | 'debtor', currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number }) => void;
+    addCustomer: (customer: Omit<Customer, 'id' | 'balance' | 'balanceAFN' | 'balanceUSD' | 'balanceIRT'>, initialBalance?: { amount: number, type: 'creditor' | 'debtor', currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => void;
+    updateCustomer: (customer: Customer, initialBalance?: { amount: number, type: 'creditor' | 'debtor', currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => Promise<void>;
     deleteCustomer: (id: string) => void;
     addCustomerPayment: (customerId: string, amount: number, description: string, currency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, trusteeId?: string, type?: 'payment' | 'receipt', customDate?: string) => Promise<CustomerTransaction | null>;
+    updateCustomerTransaction: (transaction: CustomerTransaction) => Promise<void>;
+    deleteCustomerTransaction: (transactionId: string) => Promise<void>;
     
     addEmployee: (employee: Omit<Employee, 'id'|'balance'|'balanceAFN'|'balanceUSD'|'balanceIRT'>) => void;
     updateEmployee: (employee: Employee) => void;
@@ -1513,13 +1519,135 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     ? initial.amount 
                     : (config.method === 'multiply' ? initial.amount / rate : initial.amount * rate);
                 
-                const tx: SupplierTransaction = { id: crypto.randomUUID(), supplierId: ns.id, type: initial.type === 'creditor' ? 'purchase' : 'payment', amount: initial.amount, date: new Date().toISOString(), description: 'تراز اول دوره', currency: initial.currency };
+                const tx: SupplierTransaction = { 
+                    id: crypto.randomUUID(), 
+                    supplierId: ns.id, 
+                    type: initial.type === 'creditor' ? 'purchase' : 'payment', 
+                    amount: initial.amount, 
+                    date: initial.date ? new Date(initial.date).toISOString() : new Date().toISOString(), 
+                    description: initial.description || 'تراز اول دوره', 
+                    currency: initial.currency,
+                    isManual: true,
+                    isInitial: true
+                };
                 const newB = { AFN: initial.currency === 'AFN' ? (initial.type==='creditor'?initial.amount:-initial.amount) : 0, USD: initial.currency === 'USD' ? (initial.type==='creditor'?initial.amount:-initial.amount) : 0, IRT: initial.currency === 'IRT' ? (initial.type==='creditor'?initial.amount:-initial.amount) : 0, Total: initial.type === 'creditor' ? baseAmount : -baseAmount };
                 api.processPayment('supplier', ns.id, newB, tx).then(() => fetchData(true));
             } else fetchData(true);
         });
     };
+
+    const updateSupplier = async (s: Supplier, initial?: any) => {
+        await api.updateSupplier(s);
+        
+        if (initial) {
+            const oldInitial = state.supplierTransactions.find(t => t.supplierId === s.id && t.isInitial);
+            
+            // Revert old initial if it exists
+            let balAFN = s.balanceAFN;
+            let balUSD = s.balanceUSD;
+            let balIRT = s.balanceIRT;
+            let balTotal = s.balance;
+
+            if (oldInitial) {
+                const configOld = state.storeSettings.currencyConfigs[oldInitial.currency as 'AFN'|'USD'|'IRT'];
+                const baseAmountOld = oldInitial.currency === state.storeSettings.baseCurrency ? oldInitial.amount : (configOld.method === 'multiply' ? oldInitial.amount / (oldInitial.exchangeRate || 1) : oldInitial.amount * (oldInitial.exchangeRate || 1));
+                const multiplierOld = (oldInitial.type === 'payment' || oldInitial.type === 'purchase_return') ? -1 : 1;
+
+                balAFN -= (oldInitial.currency === 'AFN' ? oldInitial.amount * multiplierOld : 0);
+                balUSD -= (oldInitial.currency === 'USD' ? oldInitial.amount * multiplierOld : 0);
+                balIRT -= (oldInitial.currency === 'IRT' ? oldInitial.amount * multiplierOld : 0);
+                balTotal -= (baseAmountOld * multiplierOld);
+                
+                await api.deleteTransaction('supplier', s.id, oldInitial.id, { AFN: balAFN, USD: balUSD, IRT: balIRT, Total: balTotal });
+            }
+
+            // Apply new initial
+            if (initial.amount > 0) {
+                const rate = initial.exchangeRate || 1;
+                const configNew = state.storeSettings.currencyConfigs[initial.currency as 'AFN'|'USD'|'IRT'];
+                const baseAmountNew = initial.currency === state.storeSettings.baseCurrency 
+                    ? initial.amount 
+                    : (configNew.method === 'multiply' ? initial.amount / rate : initial.amount * rate);
+                
+                const tx: SupplierTransaction = { 
+                    id: crypto.randomUUID(), 
+                    supplierId: s.id, 
+                    type: initial.type === 'creditor' ? 'purchase' : 'payment', 
+                    amount: initial.amount, 
+                    date: initial.date ? new Date(initial.date).toISOString() : new Date().toISOString(), 
+                    description: initial.description || 'تراز اول دوره', 
+                    currency: initial.currency,
+                    isManual: true,
+                    isInitial: true
+                };
+                
+                const multiplierNew = initial.type === 'creditor' ? 1 : -1;
+                balAFN += (initial.currency === 'AFN' ? initial.amount * multiplierNew : 0);
+                balUSD += (initial.currency === 'USD' ? initial.amount * multiplierNew : 0);
+                balIRT += (initial.currency === 'IRT' ? initial.amount * multiplierNew : 0);
+                balTotal += (baseAmountNew * multiplierNew);
+
+                await api.processPayment('supplier', s.id, { AFN: balAFN, USD: balUSD, IRT: balIRT, Total: balTotal }, tx);
+            }
+        }
+        await fetchData(true);
+    };
+
     const deleteSupplier = (id: string) => { api.deleteSupplier(id).then(() => fetchData(true)); };
+
+    const updateSupplierTransaction = async (tx: SupplierTransaction) => {
+        const s = state.suppliers.find(x => x.id === tx.supplierId);
+        if (!s) return;
+        
+        const oldTx = state.supplierTransactions.find(t => t.id === tx.id);
+        if (!oldTx) return;
+
+        // 1. Revert old transaction impact
+        const configOld = state.storeSettings.currencyConfigs[oldTx.currency as 'AFN'|'USD'|'IRT'];
+        const baseAmountOld = oldTx.currency === state.storeSettings.baseCurrency ? oldTx.amount : (configOld.method === 'multiply' ? oldTx.amount / (oldTx.exchangeRate || 1) : oldTx.amount * (oldTx.exchangeRate || 1));
+        const multiplierOld = (oldTx.type === 'payment' || oldTx.type === 'purchase_return') ? -1 : 1;
+
+        let balAFN = s.balanceAFN - (oldTx.currency === 'AFN' ? oldTx.amount * multiplierOld : 0);
+        let balUSD = s.balanceUSD - (oldTx.currency === 'USD' ? oldTx.amount * multiplierOld : 0);
+        let balIRT = s.balanceIRT - (oldTx.currency === 'IRT' ? oldTx.amount * multiplierOld : 0);
+        let balTotal = s.balance - (baseAmountOld * multiplierOld);
+
+        // 2. Apply new transaction impact
+        const configNew = state.storeSettings.currencyConfigs[tx.currency as 'AFN'|'USD'|'IRT'];
+        const baseAmountNew = tx.currency === state.storeSettings.baseCurrency ? tx.amount : (configNew.method === 'multiply' ? tx.amount / (tx.exchangeRate || 1) : tx.amount * (tx.exchangeRate || 1));
+        const multiplierNew = (tx.type === 'payment' || tx.type === 'purchase_return') ? -1 : 1;
+
+        balAFN += (tx.currency === 'AFN' ? tx.amount * multiplierNew : 0);
+        balUSD += (tx.currency === 'USD' ? tx.amount * multiplierNew : 0);
+        balIRT += (tx.currency === 'IRT' ? tx.amount * multiplierNew : 0);
+        balTotal += (baseAmountNew * multiplierNew);
+
+        const newB = { AFN: balAFN, USD: balUSD, IRT: balIRT, Total: balTotal };
+        await api.processPayment('supplier', tx.supplierId, newB, tx);
+        await fetchData(true);
+    };
+
+    const deleteSupplierTransaction = async (id: string) => {
+        const tx = state.supplierTransactions.find(t => t.id === id);
+        if (!tx) return;
+        const s = state.suppliers.find(x => x.id === tx.supplierId);
+        if (!s) return;
+
+        const config = state.storeSettings.currencyConfigs[tx.currency as 'AFN'|'USD'|'IRT'];
+        const baseAmount = tx.currency === state.storeSettings.baseCurrency ? tx.amount : (config.method === 'multiply' ? tx.amount / (tx.exchangeRate || 1) : tx.amount * (tx.exchangeRate || 1));
+        const multiplier = (tx.type === 'payment' || tx.type === 'purchase_return') ? -1 : 1;
+
+        const newB = { 
+            AFN: s.balanceAFN - (tx.currency === 'AFN' ? tx.amount * multiplier : 0), 
+            USD: s.balanceUSD - (tx.currency === 'USD' ? tx.amount * multiplier : 0), 
+            IRT: s.balanceIRT - (tx.currency === 'IRT' ? tx.amount * multiplier : 0), 
+            Total: s.balance - (baseAmount * multiplier) 
+        };
+
+        await api.deleteTransaction('supplier', tx.supplierId, id, newB);
+        await fetchData(true);
+    };
+
     const addSupplierPayment = async (sid: string, a: number, d: string, cur: any = 'AFN', rate: number = 1, type: 'payment' | 'receipt' = 'payment', customDate?: string) => {
         const s = state.suppliers.find(x => x.id === sid);
         const config = state.storeSettings.currencyConfigs[cur as 'AFN'|'USD'|'IRT'];
@@ -1533,7 +1661,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             description: d, 
             currency: cur,
             exchangeRate: rate,
-            isCash: true
+            isCash: true,
+            isManual: true
         };
         
         // If payment: we pay them -> our debt decreases -> balance decreases
@@ -1560,13 +1689,135 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     ? initial.amount 
                     : (config.method === 'multiply' ? initial.amount / rate : initial.amount * rate);
                 
-                const tx: CustomerTransaction = { id: crypto.randomUUID(), customerId: nc.id, type: initial.type === 'debtor' ? 'credit_sale' : 'payment', amount: initial.amount, date: new Date().toISOString(), description: 'تراز اول دوره', currency: initial.currency };
+                const tx: CustomerTransaction = { 
+                    id: crypto.randomUUID(), 
+                    customerId: nc.id, 
+                    type: initial.type === 'debtor' ? 'credit_sale' : 'payment', 
+                    amount: initial.amount, 
+                    date: initial.date ? new Date(initial.date).toISOString() : new Date().toISOString(), 
+                    description: initial.description || 'تراز اول دوره', 
+                    currency: initial.currency,
+                    isManual: true,
+                    isInitial: true
+                };
                 const newB = { AFN: initial.currency === 'AFN' ? (initial.type==='debtor'?initial.amount:-initial.amount) : 0, USD: initial.currency === 'USD' ? (initial.type==='debtor'?initial.amount:-initial.amount) : 0, IRT: initial.currency === 'IRT' ? (initial.type==='debtor'?initial.amount:-initial.amount) : 0, Total: initial.type === 'debtor' ? baseAmount : -baseAmount };
                 api.processPayment('customer', nc.id, newB, tx).then(() => fetchData(true));
             } else fetchData(true);
         });
     };
+
+    const updateCustomer = async (c: Customer, initial?: any) => {
+        await api.updateCustomer(c);
+        
+        if (initial) {
+            const oldInitial = state.customerTransactions.find(t => t.customerId === c.id && t.isInitial);
+            
+            // Revert old initial if it exists
+            let balAFN = c.balanceAFN;
+            let balUSD = c.balanceUSD;
+            let balIRT = c.balanceIRT;
+            let balTotal = c.balance;
+
+            if (oldInitial) {
+                const configOld = state.storeSettings.currencyConfigs[oldInitial.currency as 'AFN'|'USD'|'IRT'];
+                const baseAmountOld = oldInitial.currency === state.storeSettings.baseCurrency ? oldInitial.amount : (configOld.method === 'multiply' ? oldInitial.amount / (oldInitial.exchangeRate || 1) : oldInitial.amount * (oldInitial.exchangeRate || 1));
+                const multiplierOld = (oldInitial.type === 'payment' || oldInitial.type === 'sale_return') ? -1 : 1;
+
+                balAFN -= (oldInitial.currency === 'AFN' ? oldInitial.amount * multiplierOld : 0);
+                balUSD -= (oldInitial.currency === 'USD' ? oldInitial.amount * multiplierOld : 0);
+                balIRT -= (oldInitial.currency === 'IRT' ? oldInitial.amount * multiplierOld : 0);
+                balTotal -= (baseAmountOld * multiplierOld);
+                
+                await api.deleteTransaction('customer', c.id, oldInitial.id, { AFN: balAFN, USD: balUSD, IRT: balIRT, Total: balTotal });
+            }
+
+            // Apply new initial
+            if (initial.amount > 0) {
+                const rate = initial.exchangeRate || 1;
+                const configNew = state.storeSettings.currencyConfigs[initial.currency as 'AFN'|'USD'|'IRT'];
+                const baseAmountNew = initial.currency === state.storeSettings.baseCurrency 
+                    ? initial.amount 
+                    : (configNew.method === 'multiply' ? initial.amount / rate : initial.amount * rate);
+                
+                const tx: CustomerTransaction = { 
+                    id: crypto.randomUUID(), 
+                    customerId: c.id, 
+                    type: initial.type === 'debtor' ? 'credit_sale' : 'payment', 
+                    amount: initial.amount, 
+                    date: initial.date ? new Date(initial.date).toISOString() : new Date().toISOString(), 
+                    description: initial.description || 'تراز اول دوره', 
+                    currency: initial.currency,
+                    isManual: true,
+                    isInitial: true
+                };
+                
+                const multiplierNew = initial.type === 'debtor' ? 1 : -1;
+                balAFN += (initial.currency === 'AFN' ? initial.amount * multiplierNew : 0);
+                balUSD += (initial.currency === 'USD' ? initial.amount * multiplierNew : 0);
+                balIRT += (initial.currency === 'IRT' ? initial.amount * multiplierNew : 0);
+                balTotal += (baseAmountNew * multiplierNew);
+
+                await api.processPayment('customer', c.id, { AFN: balAFN, USD: balUSD, IRT: balIRT, Total: balTotal }, tx);
+            }
+        }
+        await fetchData(true);
+    };
+
     const deleteCustomer = (id: string) => { api.deleteCustomer(id).then(() => fetchData(true)); };
+
+    const updateCustomerTransaction = async (tx: CustomerTransaction) => {
+        const c = state.customers.find(x => x.id === tx.customerId);
+        if (!c) return;
+        
+        const oldTx = state.customerTransactions.find(t => t.id === tx.id);
+        if (!oldTx) return;
+
+        // 1. Revert old transaction impact
+        const configOld = state.storeSettings.currencyConfigs[oldTx.currency as 'AFN'|'USD'|'IRT'];
+        const baseAmountOld = oldTx.currency === state.storeSettings.baseCurrency ? oldTx.amount : (configOld.method === 'multiply' ? oldTx.amount / (oldTx.exchangeRate || 1) : oldTx.amount * (oldTx.exchangeRate || 1));
+        const multiplierOld = (oldTx.type === 'payment' || oldTx.type === 'sale_return') ? -1 : 1;
+
+        let balAFN = c.balanceAFN - (oldTx.currency === 'AFN' ? oldTx.amount * multiplierOld : 0);
+        let balUSD = c.balanceUSD - (oldTx.currency === 'USD' ? oldTx.amount * multiplierOld : 0);
+        let balIRT = c.balanceIRT - (oldTx.currency === 'IRT' ? oldTx.amount * multiplierOld : 0);
+        let balTotal = c.balance - (baseAmountOld * multiplierOld);
+
+        // 2. Apply new transaction impact
+        const configNew = state.storeSettings.currencyConfigs[tx.currency as 'AFN'|'USD'|'IRT'];
+        const baseAmountNew = tx.currency === state.storeSettings.baseCurrency ? tx.amount : (configNew.method === 'multiply' ? tx.amount / (tx.exchangeRate || 1) : tx.amount * (tx.exchangeRate || 1));
+        const multiplierNew = (tx.type === 'payment' || tx.type === 'sale_return') ? -1 : 1;
+
+        balAFN += (tx.currency === 'AFN' ? tx.amount * multiplierNew : 0);
+        balUSD += (tx.currency === 'USD' ? tx.amount * multiplierNew : 0);
+        balIRT += (tx.currency === 'IRT' ? tx.amount * multiplierNew : 0);
+        balTotal += (baseAmountNew * multiplierNew);
+
+        const newB = { AFN: balAFN, USD: balUSD, IRT: balIRT, Total: balTotal };
+        await api.processPayment('customer', tx.customerId, newB, tx);
+        await fetchData(true);
+    };
+
+    const deleteCustomerTransaction = async (id: string) => {
+        const tx = state.customerTransactions.find(t => t.id === id);
+        if (!tx) return;
+        const c = state.customers.find(x => x.id === tx.customerId);
+        if (!c) return;
+
+        const config = state.storeSettings.currencyConfigs[tx.currency as 'AFN'|'USD'|'IRT'];
+        const baseAmount = tx.currency === state.storeSettings.baseCurrency ? tx.amount : (config.method === 'multiply' ? tx.amount / (tx.exchangeRate || 1) : tx.amount * (tx.exchangeRate || 1));
+        const multiplier = (tx.type === 'payment' || tx.type === 'sale_return') ? -1 : 1;
+
+        const newB = { 
+            AFN: c.balanceAFN - (tx.currency === 'AFN' ? tx.amount * multiplier : 0), 
+            USD: c.balanceUSD - (tx.currency === 'USD' ? tx.amount * multiplier : 0), 
+            IRT: c.balanceIRT - (tx.currency === 'IRT' ? tx.amount * multiplier : 0), 
+            Total: c.balance - (baseAmount * multiplier) 
+        };
+
+        await api.deleteTransaction('customer', tx.customerId, id, newB);
+        await fetchData(true);
+    };
+
     const addCustomerPayment = async (cid: string, a: number, d: string, cur: any = 'AFN', rate: number = 1, trusteeId?: string, type: 'payment' | 'receipt' = 'payment', customDate?: string) => {
         const c = state.customers.find(x => x.id === cid);
         if (!c) return null;
@@ -1582,7 +1833,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             description: d + (trusteeId ? ' (تحویل به واسطه)' : ''), 
             currency: cur,
             exchangeRate: rate,
-            isCash: !trusteeId // If trustee is involved, it's not physical cash for us
+            isCash: !trusteeId, // If trustee is involved, it's not physical cash for us
+            isManual: true
         };
         
         // If payment (receipt from customer): they pay us -> their debt decreases -> balance decreases
@@ -1789,7 +2041,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addProduct, updateProduct, deleteProduct, registerWastage, addOrder, updateOrderStatus, updateOrder, deleteOrder, addOrderPayment, addToCart, updateCartItemQuantity, updateCartItemFinalPrice, removeFromCart, completeSale,
         beginEditSale, cancelEditSale, addSaleReturn, addPurchaseInvoice, beginEditPurchase, cancelEditPurchase, updatePurchaseInvoice, addPurchaseReturn,
         addInTransitInvoice, updateInTransitInvoice, deleteInTransitInvoice, archiveInTransitInvoice, moveInTransitItems, addInTransitPayment,
-        updateSettings, addService, deleteService, addSupplier, deleteSupplier, addSupplierPayment, addCustomer, deleteCustomer, addCustomerPayment,
+        updateSettings, addService, deleteService, addSupplier, updateSupplier, deleteSupplier, addSupplierPayment, addCustomer, updateCustomer, deleteCustomer, addCustomerPayment,
         addEmployee, updateEmployee, deleteEmployee, toggleEmployeeActive, addEmployeeAdvance, addEmployeeAdvanceToEmployee, processAndPaySalaries, addExpense, updateExpense, deleteExpense, setInvoiceTransientCustomer,
         addDepositHolder, deleteDepositHolder, processDepositTransaction
     }}>{children}</AppContext.Provider>;

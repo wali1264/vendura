@@ -479,6 +479,22 @@ export const api = {
         }
     },
 
+    deleteTransaction: async (entityType: 'customer' | 'supplier', entityId: string, transactionId: string, newBalance: any) => {
+        const store = entityType === 'customer' ? db.STORES.CUSTOMERS : db.STORES.SUPPLIERS;
+        const txStore = entityType === 'customer' ? db.STORES.CUSTOMER_TX : db.STORES.SUPPLIER_TX;
+        const entity = await db.getById<any>(store, entityId);
+        if (entity) {
+            await db.putItem(store, { 
+                ...entity, 
+                balanceAFN: newBalance.AFN, 
+                balanceUSD: newBalance.USD, 
+                balanceIRT: newBalance.IRT, 
+                balance: newBalance.Total 
+            });
+            await db.deleteItem(txStore, transactionId);
+        }
+    },
+
     processPayroll: async (updates: {id: string, newBalances: any}[], transactions: PayrollTransaction[], expense: Expense) => {
         for (const u of updates) {
             const emp = await db.getById<Employee>(db.STORES.EMPLOYEES, u.id);
