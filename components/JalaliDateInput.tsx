@@ -15,6 +15,9 @@ const JalaliDateInput: React.FC<JalaliDateInputProps> = ({ value, onChange, labe
         return getJalaliDate(isNaN(d.getTime()) ? new Date() : d);
     });
 
+    const [yearInput, setYearInput] = useState(dateParts.jy.toString());
+    const [dayInput, setDayInput] = useState(dateParts.jd.toString());
+
     // Update internal state when external value changes
     useEffect(() => {
         const d = value ? new Date(value) : new Date();
@@ -22,37 +25,67 @@ const JalaliDateInput: React.FC<JalaliDateInputProps> = ({ value, onChange, labe
             const jalali = getJalaliDate(d);
             setDateParts(prev => {
                 if (prev.jy === jalali.jy && prev.jm === jalali.jm && prev.jd === jalali.jd) return prev;
+                setYearInput(jalali.jy.toString());
+                setDayInput(jalali.jd.toString());
                 return jalali;
             });
         }
     }, [value]);
 
-    const handleChange = (updates: Partial<{ jy: number; jm: number; jd: number }>) => {
-        const newParts = { ...dateParts, ...updates };
-        
-        // Basic validation for days in month
-        let maxDays = 31;
-        if (newParts.jm > 6) maxDays = 30;
-        if (newParts.jm === 12) {
-            // Simple leap year check for Jalali (approximate or use existing logic if available)
-            // For simplicity in this UI, we'll allow up to 30 and the converter handles the rest
-            maxDays = 30; 
-        }
-        
-        if (newParts.jd > maxDays) newParts.jd = maxDays;
-        if (newParts.jd < 1) newParts.jd = 1;
-
-        const gregorianDate = jalaliToDate(newParts.jy, newParts.jm, newParts.jd);
+    const validateAndEmit = (jy: number, jm: number, jd: number) => {
         const now = new Date();
-        now.setHours(23, 59, 59, 999);
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(now.getMonth() - 6);
+        
+        // Ensure day is valid for the month
+        let maxDays = jm <= 6 ? 31 : 30;
+        if (jm === 12) maxDays = 30; // Approximation for UI
+        
+        const safeDay = Math.min(Math.max(1, jd), maxDays);
+        const safeMonth = Math.min(Math.max(1, jm), 12);
+        const safeYear = Math.min(Math.max(1300, jy), 1500);
 
-        if (gregorianDate > now) {
-            // Prevent future dates
-            return;
+        let targetDate = jalaliToDate(safeYear, safeMonth, safeDay);
+        
+        // Enforce boundaries: No future, max 6 months past
+        if (targetDate > now) targetDate = now;
+        if (targetDate < sixMonthsAgo) targetDate = sixMonthsAgo;
+        
+        const finalJalali = getJalaliDate(targetDate);
+        
+        setDateParts(finalJalali);
+        setYearInput(finalJalali.jy.toString());
+        setDayInput(finalJalali.jd.toString());
+        onChange(targetDate.toISOString().split('T')[0]);
+    };
+
+    const handleYearChange = (val: string) => {
+        const clean = toEnglishDigits(val).replace(/[^0-9]/g, '');
+        setYearInput(clean);
+        if (clean.length === 4) {
+            validateAndEmit(parseInt(clean, 10), dateParts.jm, dateParts.jd);
         }
+    };
 
-        setDateParts(newParts);
-        onChange(gregorianDate.toISOString().split('T')[0]);
+    const handleDayChange = (val: string) => {
+        const clean = toEnglishDigits(val).replace(/[^0-9]/g, '');
+        setDayInput(clean);
+        const num = parseInt(clean, 10);
+        if (!isNaN(num) && num > 0 && num <= 31) {
+            validateAndEmit(dateParts.jy, dateParts.jm, num);
+        }
+    };
+
+    const handleMonthChange = (jm: number) => {
+        validateAndEmit(dateParts.jy, jm, dateParts.jd);
+    };
+
+    const handleBlur = () => {
+        validateAndEmit(
+            parseInt(yearInput, 10) || dateParts.jy,
+            dateParts.jm,
+            parseInt(dayInput, 10) || dateParts.jd
+        );
     };
 
     return (
@@ -63,11 +96,9 @@ const JalaliDateInput: React.FC<JalaliDateInputProps> = ({ value, onChange, labe
                 <input
                     type="text"
                     inputMode="numeric"
-                    value={dateParts.jy}
-                    onChange={(e) => {
-                        const val = parseInt(toEnglishDigits(e.target.value), 10);
-                        if (!isNaN(val)) handleChange({ jy: val });
-                    }}
+                    value={yearInput}
+                    onChange={(e) => handleYearChange(e.target.value)}
+                    onBlur={handleBlur}
                     className="w-16 p-2 border border-slate-200 rounded-lg text-center font-bold text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                     placeholder="سال"
                 />
@@ -75,7 +106,7 @@ const JalaliDateInput: React.FC<JalaliDateInputProps> = ({ value, onChange, labe
                 {/* Month */}
                 <select
                     value={dateParts.jm}
-                    onChange={(e) => handleChange({ jm: parseInt(e.target.value, 10) })}
+                    onChange={(e) => handleMonthChange(parseInt(e.target.value, 10))}
                     className="flex-grow p-2 border border-slate-200 rounded-lg text-center font-bold text-sm bg-white focus:ring-2 focus:ring-blue-500 outline-none appearance-none"
                 >
                     {JALALI_MONTHS.map(m => (
@@ -87,11 +118,9 @@ const JalaliDateInput: React.FC<JalaliDateInputProps> = ({ value, onChange, labe
                 <input
                     type="text"
                     inputMode="numeric"
-                    value={dateParts.jd}
-                    onChange={(e) => {
-                        const val = parseInt(toEnglishDigits(e.target.value), 10);
-                        if (!isNaN(val)) handleChange({ jd: val });
-                    }}
+                    value={dayInput}
+                    onChange={(e) => handleDayChange(e.target.value)}
+                    onBlur={handleBlur}
                     className="w-10 p-2 border border-slate-200 rounded-lg text-center font-bold text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                     placeholder="روز"
                 />
