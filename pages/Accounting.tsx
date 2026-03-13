@@ -7,6 +7,7 @@ import Toast from '../components/Toast';
 import { formatCurrency, toEnglishDigits, formatBalance } from '../utils/formatters';
 import TransactionHistoryModal from '../components/TransactionHistoryModal';
 import ReceiptPreviewModal from '../components/ReceiptPreviewModal';
+import JalaliDateInput from '../components/JalaliDateInput';
 
 const Modal: React.FC<{ title: string, onClose: () => void, children: React.ReactNode, headerAction?: React.ReactNode }> = ({ title, onClose, children, headerAction }) => (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center z-[100] p-4 pt-12 md:pt-20 overflow-y-auto modal-animate">
@@ -27,6 +28,7 @@ const SuppliersTab = () => {
     const { suppliers, addSupplier, deleteSupplier, addSupplierPayment, supplierTransactions, storeSettings, inTransitInvoices } = useAppContext();
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+    const [transactionType, setTransactionType] = useState<'payment' | 'receipt'>('payment');
     const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
     const [toast, setToast] = useState('');
     const [historyModalData, setHistoryModalData] = useState<{ person: Supplier, transactions: SupplierTransaction[] } | null>(null);
@@ -42,6 +44,7 @@ const SuppliersTab = () => {
     const [paymentCurrency, setPaymentCurrency] = useState<'AFN' | 'USD' | 'IRT'>(baseCurrency);
     const [exchangeRate, setExchangeRate] = useState('');
     const [paymentAmount, setPaymentAmount] = useState('');
+    const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split('T')[0]);
 
     const showToast = (message: string) => { setToast(message); setTimeout(() => setToast(''), 3000); };
 
@@ -68,22 +71,26 @@ const SuppliersTab = () => {
         if (window.confirm(`آیا از حذف تأمین‌کننده "${supplier.name}" اطمینان دارید؟`)) deleteSupplier(supplier.id);
     };
 
-    const handleOpenPayModal = (supplier: Supplier) => { 
+    const handleOpenPayModal = (supplier: Supplier, type: 'payment' | 'receipt' = 'payment') => { 
         setSelectedSupplier(supplier); 
+        setTransactionType(type);
         setPaymentCurrency(storeSettings.baseCurrency || 'AFN'); 
         setExchangeRate(''); 
         setPaymentAmount(''); 
+        setTransactionDate(new Date().toISOString().split('T')[0]);
         setIsPayModalOpen(true); 
     };
 
     const handleAddPaymentForm = async (e: React.FormEvent<HTMLDivElement> | React.FormEvent<HTMLFormElement>) => {
         e.preventDefault(); if (!selectedSupplier) return;
+        const formData = new FormData(e.currentTarget as HTMLFormElement);
         const amount = Number(paymentAmount);
-        const description = (new FormData(e.currentTarget as HTMLFormElement)).get('description') as string || 'پرداخت وجه';
+        const description = formData.get('description') as string || (transactionType === 'payment' ? 'پرداخت وجه' : 'دریافت وجه');
+        const customDate = formData.get('transactionDate') as string;
         if (!amount || amount <= 0) { showToast("مبلغ باید بزرگتر از صفر باشد."); return; }
         if (paymentCurrency !== baseCurrency && (!exchangeRate || Number(exchangeRate) <= 0)) { showToast("لطفاً نرخ ارز را وارد کنید."); return; }
         
-        const newTransaction = await addSupplierPayment(selectedSupplier.id, amount, description, paymentCurrency, paymentCurrency === baseCurrency ? 1 : Number(exchangeRate));
+        const newTransaction = await addSupplierPayment(selectedSupplier.id, amount, description, paymentCurrency, paymentCurrency === baseCurrency ? 1 : Number(exchangeRate), transactionType, customDate);
         
         if (newTransaction) { 
             setIsPayModalOpen(false); 
@@ -167,7 +174,10 @@ const SuppliersTab = () => {
                                     <div className="flex justify-center items-center gap-2">
                                         <button onClick={() => handleViewHistory(s)} className="p-2.5 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-blue-100 transition-all" title="مشاهده صورت حساب"><EyeIcon className="w-6 h-6"/></button>
                                         <button onClick={() => handleDelete(s)} className={`p-2.5 rounded-xl transition-all ${(Math.abs(s.balanceAFN || 0) === 0 && Math.abs(s.balanceUSD || 0) === 0 && Math.abs(s.balanceIRT || 0) === 0) ? 'text-red-500 hover:bg-red-50 cursor-pointer' : 'text-slate-300 cursor-not-allowed'}`} disabled={Math.abs(s.balanceAFN || 0) > 0 || Math.abs(s.balanceUSD || 0) > 0 || Math.abs(s.balanceIRT || 0) > 0}><TrashIcon className="w-6 h-6" /></button>
-                                        <button onClick={() => handleOpenPayModal(s)} className="bg-emerald-500 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-md hover:shadow-emerald-200 transition-all active:scale-95">ثبت پرداخت</button>
+                                        <div className="flex flex-col gap-1">
+                                            <button onClick={() => handleOpenPayModal(s, 'payment')} className="bg-emerald-500 text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-emerald-200 transition-all active:scale-95">ثبت پرداخت</button>
+                                            <button onClick={() => handleOpenPayModal(s, 'receipt')} className="bg-blue-500 text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-blue-200 transition-all active:scale-95">ثبت دریافت</button>
+                                        </div>
                                     </div>
                                 </td>
                             </tr>
@@ -203,7 +213,10 @@ const SuppliersTab = () => {
                                     ))}
                                 </div>
                             </div>
-                            <button onClick={() => handleOpenPayModal(s)} className="bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-lg active:shadow-none transition-all">ثبت پرداخت</button>
+                            <div className="flex flex-col gap-2">
+                                <button onClick={() => handleOpenPayModal(s, 'payment')} className="bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-lg active:shadow-none transition-all">ثبت پرداخت</button>
+                                <button onClick={() => handleOpenPayModal(s, 'receipt')} className="bg-blue-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-lg active:shadow-none transition-all">ثبت دریافت</button>
+                            </div>
                         </div>
                     </div>
                 ))}
@@ -239,7 +252,7 @@ const SuppliersTab = () => {
             )}
 
             {isPayModalOpen && selectedSupplier && (
-                 <Modal title={`ثبت پرداخت: ${selectedSupplier.name}`} onClose={() => setIsPayModalOpen(false)}>
+                 <Modal title={`${transactionType === 'payment' ? 'ثبت پرداخت' : 'ثبت دریافت'}: ${selectedSupplier.name}`} onClose={() => setIsPayModalOpen(false)}>
                     <form onSubmit={handleAddPaymentForm} className="space-y-4">
                         <div className="flex gap-4 p-3 bg-blue-50 rounded-xl">
                             {['AFN', 'USD', 'IRT'].map(c => (
@@ -254,10 +267,15 @@ const SuppliersTab = () => {
                                 <input type="text" inputMode="decimal" value={exchangeRate} onChange={e => setExchangeRate(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} placeholder="نرخ" className="w-full p-2.5 border border-slate-200 rounded-xl font-mono text-center" />
                             </div>
                         )}
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs whitespace-nowrap font-bold text-slate-400">تاریخ تراکنش:</span>
+                            <JalaliDateInput value={transactionDate} onChange={setTransactionDate} />
+                            <input type="hidden" name="transactionDate" value={transactionDate} />
+                        </div>
                         <input name="amount" type="text" inputMode="decimal" value={paymentAmount} onChange={e => setPaymentAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} placeholder={`مبلغ (${paymentCurrency})`} className="w-full p-4 border border-slate-200 rounded-xl font-bold text-center text-xl" required />
                         {paymentCurrency !== baseCurrency && convertedPayment > 0 && <p className="text-[10px] font-black text-emerald-600 text-left">معادل از حساب کل: {convertedPayment < 1 ? convertedPayment.toFixed(4) : convertedPayment.toLocaleString(undefined, { maximumFractionDigits: 2 })} {baseCurrencyName}</p>}
                         <input name="description" placeholder="توضیحات (اختیاری)" className="w-full p-4 border border-slate-200 rounded-xl" />
-                        <button type="submit" className="w-full bg-emerald-600 text-white p-4 rounded-xl shadow-xl font-black text-lg active:scale-[0.98]">ثبت و چاپ رسید</button>
+                        <button type="submit" className={`w-full ${transactionType === 'payment' ? 'bg-emerald-600' : 'bg-blue-600'} text-white p-4 rounded-xl shadow-xl font-black text-lg active:scale-[0.98]`}>ثبت و چاپ رسید</button>
                     </form>
                 </Modal>
             )}
@@ -321,6 +339,7 @@ const PayrollTab = () => {
     const [advanceCurrency, setAdvanceCurrency] = useState<'AFN' | 'USD' | 'IRT'>(storeSettings.baseCurrency);
     const [advanceRate, setAdvanceRate] = useState('');
     const [advanceAmount, setAdvanceAmount] = useState('');
+    const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split('T')[0]);
 
     const filteredEmployees = useMemo(() => {
         return employees.filter(e => e.isActive !== showInactive);
@@ -345,10 +364,12 @@ const PayrollTab = () => {
             return;
         }
 
-        addEmployeeAdvance(employeeId, amount, description, advanceCurrency, advanceCurrency === storeSettings.baseCurrency ? 1 : Number(advanceRate));
+        const customDate = formData.get('transactionDate') as string;
+        addEmployeeAdvance(employeeId, amount, description, advanceCurrency, advanceCurrency === storeSettings.baseCurrency ? 1 : Number(advanceRate), customDate);
         (ev.target as HTMLFormElement).reset();
         setAdvanceRate('');
         setAdvanceAmount('');
+        setTransactionDate(new Date().toISOString().split('T')[0]);
         showToast("تراکنش با موفقیت ثبت شد.");
     };
 
@@ -459,6 +480,8 @@ const PayrollTab = () => {
                                             {advanceCurrency !== storeSettings.baseCurrency && (
                                                 <input type="text" inputMode="decimal" value={advanceRate} onChange={e => setAdvanceRate(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} className="w-full p-2 border border-slate-200 rounded-xl text-center text-xs font-mono" placeholder={`نرخ تبدیل (${storeSettings.currencyConfigs[storeSettings.baseCurrency].name} به ${advanceCurrency})`} required />
                                             )}
+                                            <JalaliDateInput value={transactionDate} onChange={setTransactionDate} />
+                                            <input type="hidden" name="transactionDate" value={transactionDate} />
                                             <div className="flex gap-2">
                                                 <input type="text" name="description" className="flex-grow p-2 border border-slate-200 rounded-xl text-xs font-medium focus:ring-2 focus:ring-amber-500 outline-none" placeholder="توضیحات (اختیاری)" />
                                                 <button type="submit" className="bg-amber-500 text-white px-4 py-2 rounded-xl text-xs font-black shadow-md hover:shadow-amber-100 transition-all active:scale-95">ثبت</button>
@@ -500,6 +523,8 @@ const PayrollTab = () => {
                         {e.isActive && (
                             <div className="pt-3 border-t border-dashed border-slate-200">
                                 <form onSubmit={(ev) => handleAddAdvanceForm(ev, e.id)} className="flex flex-col gap-2 p-3 bg-slate-100/50 rounded-xl border border-slate-200">
+                                    <JalaliDateInput value={transactionDate} onChange={setTransactionDate} />
+                                    <input type="hidden" name="transactionDate" value={transactionDate} />
                                     <div className="flex gap-2">
                                         <input type="text" inputMode="decimal" name="amount" onInput={(e:any) => e.target.value = toEnglishDigits(e.target.value).replace(/[^0-9.]/g, '')} className="w-1/3 p-2.5 border border-slate-200 rounded-xl text-center text-sm font-bold" placeholder="مبلغ" required />
                                         <input type="text" name="description" className="w-2/3 p-2.5 border border-slate-200 rounded-xl text-xs" placeholder="توضیحات (اختیاری)" />
@@ -593,6 +618,7 @@ const CustomersTab = () => {
     const { customers, depositHolders, addCustomer, deleteCustomer, addCustomerPayment, customerTransactions, storeSettings } = useAppContext();
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isPayModalOpen, setIsPayModalOpen] = useState(false);
+    const [transactionType, setTransactionType] = useState<'payment' | 'receipt'>('payment');
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     const [toast, setToast] = useState('');
     const [historyModalData, setHistoryModalData] = useState<{ person: Customer, transactions: CustomerTransaction[] } | null>(null);
@@ -610,6 +636,7 @@ const CustomersTab = () => {
     const [paymentCurrency, setPaymentCurrency] = useState<'AFN' | 'USD' | 'IRT'>(baseCurrency);
     const [exchangeRate, setExchangeRate] = useState('');
     const [paymentAmount, setPaymentAmount] = useState('');
+    const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split('T')[0]);
     const [selectedTrusteeId, setSelectedTrusteeId] = useState<string>('');
     const [isTrusteeMenuOpen, setIsTrusteeMenuOpen] = useState(false);
     const trusteeMenuRef = useRef<HTMLDivElement>(null);
@@ -663,11 +690,13 @@ const CustomersTab = () => {
         }
     };
 
-    const handleOpenPayModal = (customer: Customer) => {
+    const handleOpenPayModal = (customer: Customer, type: 'payment' | 'receipt' = 'payment') => {
         setSelectedCustomer(customer);
+        setTransactionType(type);
         setPaymentCurrency(storeSettings.baseCurrency || 'AFN');
         setExchangeRate('');
         setPaymentAmount('');
+        setTransactionDate(new Date().toISOString().split('T')[0]);
         setSelectedTrusteeId('');
         setIsPayModalOpen(true);
     };
@@ -678,7 +707,8 @@ const CustomersTab = () => {
         
         const amount = Number(paymentAmount);
         const formData = new FormData(e.currentTarget);
-        const description = formData.get('description') as string || 'دریافت نقدی';
+        const description = formData.get('description') as string || (transactionType === 'payment' ? 'دریافت نقدی' : 'پرداخت نقدی');
+        const customDate = formData.get('transactionDate') as string;
         
         if (!amount || amount <= 0) {
             showToast("مبلغ باید بزرگتر از صفر باشد.");
@@ -696,7 +726,9 @@ const CustomersTab = () => {
             description, 
             paymentCurrency, 
             paymentCurrency === baseCurrency ? 1 : Number(exchangeRate),
-            selectedTrusteeId || undefined
+            selectedTrusteeId || undefined,
+            transactionType,
+            customDate
         );
         
         if (newTransaction) {
@@ -789,7 +821,10 @@ const CustomersTab = () => {
                                         >
                                             <TrashIcon className="w-6 h-6" />
                                         </button>
-                                        <button onClick={() => handleOpenPayModal(c)} className="bg-emerald-500 text-white px-4 py-2.5 rounded-xl text-sm font-bold shadow-md hover:shadow-emerald-200 transition-all active:scale-95">ثبت دریافت</button>
+                                        <div className="flex flex-col gap-1">
+                                            <button onClick={() => handleOpenPayModal(c, 'payment')} className="bg-emerald-500 text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-emerald-200 transition-all active:scale-95">ثبت دریافت</button>
+                                            <button onClick={() => handleOpenPayModal(c, 'receipt')} className="bg-red-500 text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-red-200 transition-all active:scale-95">ثبت پرداخت</button>
+                                        </div>
                                      </div>
                                 </td>
                             </tr>
@@ -835,7 +870,10 @@ const CustomersTab = () => {
                                     ))}
                                 </div>
                             </div>
-                            <button onClick={() => handleOpenPayModal(c)} className="bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-sm font-black shadow-lg shadow-emerald-100 active:shadow-none transition-all">ثبت دریافت</button>
+                            <div className="flex flex-col gap-2">
+                                <button onClick={() => handleOpenPayModal(c, 'payment')} className="bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-lg shadow-emerald-100 active:shadow-none transition-all">ثبت دریافت</button>
+                                <button onClick={() => handleOpenPayModal(c, 'receipt')} className="bg-red-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-lg shadow-red-100 active:shadow-none transition-all">ثبت پرداخت</button>
+                            </div>
                         </div>
                     </div>
                 ))}
@@ -891,48 +929,50 @@ const CustomersTab = () => {
 
             {isPayModalOpen && selectedCustomer && (
                  <Modal 
-                    title={`دریافت وجه از: ${selectedCustomer.name}`} 
+                    title={`${transactionType === 'payment' ? 'دریافت وجه از' : 'پرداخت وجه به'}: ${selectedCustomer.name}`} 
                     onClose={() => setIsPayModalOpen(false)}
                     headerAction={
-                        <div className="relative" ref={trusteeMenuRef}>
-                            <button 
-                                onClick={() => setIsTrusteeMenuOpen(!isTrusteeMenuOpen)}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 transition-all ${selectedTrusteeId ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300'}`}
-                                title="انتخاب واسط (امانت‌گذار)"
-                            >
-                                <UserGroupIcon className="w-5 h-5" />
-                                <span className="text-[10px] font-black hidden sm:inline">{selectedTrustee ? selectedTrustee.name : 'انتخاب واسط'}</span>
-                                <ChevronDownIcon className={`w-4 h-4 transition-transform ${isTrusteeMenuOpen ? 'rotate-180' : ''}`} />
-                            </button>
-                            
-                            {isTrusteeMenuOpen && (
-                                <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-gray-200 p-2 z-[110] modal-animate overflow-hidden">
-                                    <div className="text-[10px] font-black text-slate-400 p-2 border-b mb-1 uppercase tracking-widest">امانت‌گذاران (واسط)</div>
-                                    <div className="max-h-60 overflow-y-auto no-scrollbar">
-                                        <button 
-                                            onClick={() => { setSelectedTrusteeId(''); setIsTrusteeMenuOpen(false); }}
-                                            className={`w-full text-right p-3 rounded-xl flex justify-between items-center mb-1 transition-colors ${selectedTrusteeId === '' ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50 text-slate-600'}`}
-                                        >
-                                            <span className="text-xs font-bold">بدون واسط (نقدی مستقیم)</span>
-                                            {selectedTrusteeId === '' && <CheckIcon className="w-4 h-4" />}
-                                        </button>
-                                        {depositHolders.map(holder => (
+                        transactionType === 'payment' ? (
+                            <div className="relative" ref={trusteeMenuRef}>
+                                <button 
+                                    onClick={() => setIsTrusteeMenuOpen(!isTrusteeMenuOpen)}
+                                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border-2 transition-all ${selectedTrusteeId ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:border-indigo-300'}`}
+                                    title="انتخاب واسط (امانت‌گذار)"
+                                >
+                                    <UserGroupIcon className="w-5 h-5" />
+                                    <span className="text-[10px] font-black hidden sm:inline">{selectedTrustee ? selectedTrustee.name : 'انتخاب واسط'}</span>
+                                    <ChevronDownIcon className={`w-4 h-4 transition-transform ${isTrusteeMenuOpen ? 'rotate-180' : ''}`} />
+                                </button>
+                                
+                                {isTrusteeMenuOpen && (
+                                    <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-2xl shadow-2xl border border-gray-200 p-2 z-[110] modal-animate overflow-hidden">
+                                        <div className="text-[10px] font-black text-slate-400 p-2 border-b mb-1 uppercase tracking-widest">امانت‌گذاران (واسط)</div>
+                                        <div className="max-h-60 overflow-y-auto no-scrollbar">
                                             <button 
-                                                key={holder.id}
-                                                onClick={() => { setSelectedTrusteeId(holder.id); setIsTrusteeMenuOpen(false); }}
-                                                className={`w-full text-right p-3 rounded-xl flex justify-between items-center mb-1 transition-colors ${selectedTrusteeId === holder.id ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50 text-slate-600'}`}
+                                                onClick={() => { setSelectedTrusteeId(''); setIsTrusteeMenuOpen(false); }}
+                                                className={`w-full text-right p-3 rounded-xl flex justify-between items-center mb-1 transition-colors ${selectedTrusteeId === '' ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50 text-slate-600'}`}
                                             >
-                                                <div>
-                                                    <p className="text-xs font-black">{holder.name}</p>
-                                                    <p className="text-[9px] opacity-60">تراز: {formatBalance(holder.balanceAFN)} AFN</p>
-                                                </div>
-                                                {selectedTrusteeId === holder.id && <CheckIcon className="w-4 h-4" />}
+                                                <span className="text-xs font-bold">بدون واسط (نقدی مستقیم)</span>
+                                                {selectedTrusteeId === '' && <CheckIcon className="w-4 h-4" />}
                                             </button>
-                                        ))}
+                                            {depositHolders.map(holder => (
+                                                <button 
+                                                    key={holder.id}
+                                                    onClick={() => { setSelectedTrusteeId(holder.id); setIsTrusteeMenuOpen(false); }}
+                                                    className={`w-full text-right p-3 rounded-xl flex justify-between items-center mb-1 transition-colors ${selectedTrusteeId === holder.id ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-slate-50 text-slate-600'}`}
+                                                >
+                                                    <div>
+                                                        <p className="text-xs font-black">{holder.name}</p>
+                                                        <p className="text-[9px] opacity-60">تراز: {formatBalance(holder.balanceAFN)} AFN</p>
+                                                    </div>
+                                                    {selectedTrusteeId === holder.id && <CheckIcon className="w-4 h-4" />}
+                                                </button>
+                                            ))}
+                                        </div>
                                     </div>
-                                </div>
-                            )}
-                        </div>
+                                )}
+                            </div>
+                        ) : null
                     }
                 >
                     <form onSubmit={handleAddPaymentForm} className="space-y-4">
@@ -963,12 +1003,17 @@ const CustomersTab = () => {
                                 <input type="text" inputMode="decimal" value={exchangeRate} onChange={e => setExchangeRate(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} placeholder="نرخ" className="w-full p-2.5 border border-slate-200 rounded-xl font-mono text-center" />
                             </div>
                         )}
-                        <input name="amount" type="text" inputMode="decimal" value={paymentAmount} onChange={e => setPaymentAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} placeholder={`مبلغ دریافتی (${paymentCurrency})`} className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-emerald-50 font-black text-xl text-center" required />
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs whitespace-nowrap font-bold text-slate-400">تاریخ تراکنش:</span>
+                            <JalaliDateInput value={transactionDate} onChange={setTransactionDate} />
+                            <input type="hidden" name="transactionDate" value={transactionDate} />
+                        </div>
+                        <input name="amount" type="text" inputMode="decimal" value={paymentAmount} onChange={e => setPaymentAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} placeholder={`${transactionType === 'payment' ? 'مبلغ دریافتی' : 'مبلغ پرداختی'} (${paymentCurrency})`} className={`w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 ${transactionType === 'payment' ? 'focus:ring-emerald-50' : 'focus:ring-red-50'} font-black text-xl text-center`} required />
                         {paymentCurrency !== baseCurrency && convertedPayment > 0 && (
-                            <p className="text-[10px] font-black text-emerald-600 text-left">معادل دریافتی: {convertedPayment < 1 ? convertedPayment.toFixed(4) : convertedPayment.toLocaleString(undefined, { maximumFractionDigits: 2 })} {baseCurrencyName}</p>
+                            <p className={`text-[10px] font-black ${transactionType === 'payment' ? 'text-emerald-600' : 'text-red-600'} text-left`}>{transactionType === 'payment' ? 'معادل دریافتی' : 'معادل پرداختی'}: {convertedPayment < 1 ? convertedPayment.toFixed(4) : convertedPayment.toLocaleString(undefined, { maximumFractionDigits: 2 })} {baseCurrencyName}</p>
                         )}
                         <input name="description" placeholder="بابت... (اختیاری)" className="w-full p-4 border border-slate-200 rounded-xl" />
-                        <button type="submit" className="w-full bg-emerald-600 text-white p-4 rounded-xl shadow-xl shadow-emerald-100 font-black text-lg active:scale-[0.98]">ثبت نهایی و چاپ رسید</button>
+                        <button type="submit" className={`w-full ${transactionType === 'payment' ? 'bg-emerald-600 shadow-emerald-100' : 'bg-red-600 shadow-red-100'} text-white p-4 rounded-xl shadow-xl font-black text-lg active:scale-[0.98]`}>ثبت نهایی و چاپ رسید</button>
                     </form>
                 </Modal>
             )}
@@ -991,6 +1036,7 @@ const ExpensesTab = () => {
     const [expenseRate, setExpenseRate] = useState('');
     const [filterCategory, setFilterCategory] = useState<string>('all');
     const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
 
     const baseCurrency = storeSettings.baseCurrency;
     const baseCurrencyName = storeSettings.currencyConfigs[baseCurrency].name;
@@ -1037,6 +1083,10 @@ const ExpensesTab = () => {
         closeModal();
     };
 
+    const openModal = () => {
+        setIsModalOpen(true);
+        setExpenseDate(new Date().toISOString().split('T')[0]);
+    };
     const closeModal = () => {
         setIsModalOpen(false);
         setEditingExpense(null);
@@ -1048,6 +1098,7 @@ const ExpensesTab = () => {
         setEditingExpense(expense);
         setExpenseCurrency(expense.currency);
         setExpenseRate(expense.exchangeRate.toString());
+        setExpenseDate(new Date(expense.date).toISOString().split('T')[0]);
         setIsModalOpen(true);
     };
 
@@ -1069,7 +1120,7 @@ const ExpensesTab = () => {
     return (
         <div>
             <div className="flex flex-wrap gap-3 mb-8">
-                <button onClick={() => setIsModalOpen(true)} className="flex items-center bg-blue-600 text-white px-5 py-3 rounded-xl shadow-lg btn-primary">
+                <button onClick={openModal} className="flex items-center bg-blue-600 text-white px-5 py-3 rounded-xl shadow-lg btn-primary">
                     <PlusIcon className="w-5 h-5 ml-2" /> <span className="font-bold">ثبت هزینه جدید</span>
                 </button>
                 
@@ -1186,7 +1237,8 @@ const ExpensesTab = () => {
             {isModalOpen && (
                 <Modal title={editingExpense ? "ویرایش هزینه" : "ثبت هزینه جدید"} onClose={closeModal}>
                     <form onSubmit={handleAddExpenseForm} className="space-y-4">
-                        <input name="date" type="date" className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50" defaultValue={editingExpense ? new Date(editingExpense.date).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]} required />
+                        <JalaliDateInput value={expenseDate} onChange={setExpenseDate} label="تاریخ هزینه" />
+                        <input type="hidden" name="date" value={expenseDate} />
                         <input name="description" placeholder="شرح هزینه (مثلاً خرید کاغذ)" className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50" defaultValue={editingExpense?.description} required />
                         
                         <div className="flex gap-4 p-3 bg-slate-50 rounded-xl border border-slate-100">

@@ -46,7 +46,7 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
         filteredTransactions.forEach(t => {
             const currency = (t as any).currency || 'AFN';
             if (type === 'supplier') {
-                if (t.type === 'purchase') {
+                if (t.type === 'purchase' || t.type === 'receipt') {
                     if (currency === 'USD') debtUSD += t.amount; 
                     else if (currency === 'IRT') debtIRT += t.amount;
                     else debtAFN += t.amount;
@@ -56,7 +56,7 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
                     else paidAFN += t.amount;
                 }
             } else if (type === 'customer') {
-                if (t.type === 'credit_sale') {
+                if (t.type === 'credit_sale' || t.type === 'receipt') {
                     if (currency === 'USD') debtUSD += t.amount; 
                     else if (currency === 'IRT') debtIRT += t.amount;
                     else debtAFN += t.amount;
@@ -95,13 +95,13 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
                     const curSuffix = currency === 'USD' ? '$' : (currency === 'IRT' ? 'ت' : '');
                     
                     if (type === 'supplier') {
-                        // خرید باعث بستانکار شدن تأمین‌کننده می‌شود (بدهی ما زیاد می‌شود)
-                        if (t.type === 'purchase') credit = t.amount;
-                        // پرداخت به او یا فروش به او باعث بدهکار شدن او می‌شود (بدهی ما کم می‌شود یا او بدهکار می‌شود)
-                        else if (t.type === 'payment' || t.type === 'purchase_return' || t.type === 'sale') debit = t.amount;
+                        // خرید یا دریافت وجه از او باعث بستانکار شدن تأمین‌کننده می‌شود (بدهی ما زیاد می‌شود)
+                        if (t.type === 'purchase' || t.type === 'receipt') credit = t.amount;
+                        // پرداخت به او یا برگشت از خرید باعث بدهکار شدن او می‌شود (بدهی ما کم می‌شود)
+                        else if (t.type === 'payment' || t.type === 'purchase_return') debit = t.amount;
                     } else if (type === 'customer') {
-                        // فروش به مشتری باعث بدهکار شدن او می‌شود
-                        if (t.type === 'credit_sale' || t.type === 'sale') debit = t.amount;
+                        // فروش به مشتری یا پرداخت وجه به او باعث بدهکار شدن او می‌شود
+                        if (t.type === 'credit_sale' || t.type === 'receipt') debit = t.amount;
                         // دریافت وجه یا برگشت از فروش باعث بستانکار شدن او می‌شود
                         else if (t.type === 'payment' || t.type === 'sale_return') credit = t.amount;
                     } else if (type === 'employee') {
@@ -116,7 +116,7 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
                             <td data-label="بدهکار" className="p-3 text-blue-600 font-bold text-xl" dir="ltr">{debit > 0 ? `${debit.toLocaleString('en-US')} ${curSuffix}` : '-'}</td>
                             <td data-label="بستانکار" className="p-3 text-red-600 font-bold text-xl" dir="ltr">{credit > 0 ? `${credit.toLocaleString('en-US')} ${curSuffix}` : '-'}</td>
                             <td className="p-3 actions-cell">
-                                {t.type === 'payment' && (
+                                {(t.type === 'payment' || t.type === 'receipt') && (
                                     <button onClick={() => onReprint(t.id)} className="p-2 rounded-full text-gray-500 hover:text-green-600 hover:bg-green-100 transition-colors" title="چاپ مجدد رسید">
                                         <PrintIcon className="w-5 h-5" />
                                     </button>

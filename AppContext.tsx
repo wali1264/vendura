@@ -87,17 +87,17 @@ interface AppContextType extends AppState {
     // Accounting
     addSupplier: (supplier: Omit<Supplier, 'id' | 'balance' | 'balanceAFN' | 'balanceUSD' | 'balanceIRT'>, initialBalance?: { amount: number, type: 'creditor' | 'debtor', currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number }) => void;
     deleteSupplier: (id: string) => void;
-    addSupplierPayment: (supplierId: string, amount: number, description: string, currency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number) => Promise<SupplierTransaction>;
+    addSupplierPayment: (supplierId: string, amount: number, description: string, currency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, type?: 'payment' | 'receipt', customDate?: string) => Promise<SupplierTransaction>;
     
     addCustomer: (customer: Omit<Customer, 'id' | 'balance' | 'balanceAFN' | 'balanceUSD' | 'balanceIRT'>, initialBalance?: { amount: number, type: 'creditor' | 'debtor', currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number }) => void;
     deleteCustomer: (id: string) => void;
-    addCustomerPayment: (customerId: string, amount: number, description: string, currency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, trusteeId?: string) => Promise<CustomerTransaction | null>;
+    addCustomerPayment: (customerId: string, amount: number, description: string, currency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, trusteeId?: string, type?: 'payment' | 'receipt', customDate?: string) => Promise<CustomerTransaction | null>;
     
     addEmployee: (employee: Omit<Employee, 'id'|'balance'|'balanceAFN'|'balanceUSD'|'balanceIRT'>) => void;
     updateEmployee: (employee: Employee) => void;
     deleteEmployee: (id: string) => void;
     toggleEmployeeActive: (id: string) => void;
-    addEmployeeAdvance: (employeeId: string, amount: number, description: string, currency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number) => void;
+    addEmployeeAdvance: (employeeId: string, amount: number, description: string, currency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, customDate?: string) => void;
     processAndPaySalaries: () => { success: boolean; message: string };
     addEmployeeAdvanceToEmployee: (employeeId: string, amount: number, description: string, currency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number) => void;
     addExpense: (expense: Omit<Expense, 'id'>) => void;
@@ -1520,22 +1520,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
     };
     const deleteSupplier = (id: string) => { api.deleteSupplier(id).then(() => fetchData(true)); };
-    const addSupplierPayment = async (sid: string, a: number, d: string, cur: any = 'AFN', rate: number = 1) => {
+    const addSupplierPayment = async (sid: string, a: number, d: string, cur: any = 'AFN', rate: number = 1, type: 'payment' | 'receipt' = 'payment', customDate?: string) => {
         const s = state.suppliers.find(x => x.id === sid);
         const config = state.storeSettings.currencyConfigs[cur as 'AFN'|'USD'|'IRT'];
         const baseAmount = cur === state.storeSettings.baseCurrency ? a : (config.method === 'multiply' ? a / rate : a * rate);
         const tx: SupplierTransaction = { 
             id: crypto.randomUUID(), 
             supplierId: sid, 
-            type: 'payment', 
+            type: type, 
             amount: a, 
-            date: new Date().toISOString(), 
+            date: customDate ? new Date(customDate).toISOString() : new Date().toISOString(), 
             description: d, 
             currency: cur,
             exchangeRate: rate,
             isCash: true
         };
-        const newB = { AFN: s!.balanceAFN - (cur==='AFN'?a:0), USD: s!.balanceUSD - (cur==='USD'?a:0), IRT: s!.balanceIRT - (cur==='IRT'?a:0), Total: s!.balance - baseAmount };
+        
+        // If payment: we pay them -> our debt decreases -> balance decreases
+        // If receipt: they pay us -> our debt increases -> balance increases
+        const multiplier = type === 'payment' ? -1 : 1;
+        
+        const newB = { 
+            AFN: s!.balanceAFN + (cur === 'AFN' ? a * multiplier : 0), 
+            USD: s!.balanceUSD + (cur === 'USD' ? a * multiplier : 0), 
+            IRT: s!.balanceIRT + (cur === 'IRT' ? a * multiplier : 0), 
+            Total: s!.balance + (baseAmount * multiplier) 
+        };
         await api.processPayment('supplier', sid, newB, tx);
         await fetchData(true);
         return tx;
@@ -1557,7 +1567,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
     };
     const deleteCustomer = (id: string) => { api.deleteCustomer(id).then(() => fetchData(true)); };
-    const addCustomerPayment = async (cid: string, a: number, d: string, cur: any = 'AFN', rate: number = 1, trusteeId?: string) => {
+    const addCustomerPayment = async (cid: string, a: number, d: string, cur: any = 'AFN', rate: number = 1, trusteeId?: string, type: 'payment' | 'receipt' = 'payment', customDate?: string) => {
         const c = state.customers.find(x => x.id === cid);
         if (!c) return null;
         
@@ -1566,20 +1576,32 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const tx: CustomerTransaction = { 
             id: crypto.randomUUID(), 
             customerId: cid, 
-            type: 'payment', 
+            type: type, 
             amount: a, 
-            date: new Date().toISOString(), 
+            date: customDate ? new Date(customDate).toISOString() : new Date().toISOString(), 
             description: d + (trusteeId ? ' (تحویل به واسطه)' : ''), 
             currency: cur,
             exchangeRate: rate,
             isCash: !trusteeId // If trustee is involved, it's not physical cash for us
         };
         
+        // If payment (receipt from customer): they pay us -> their debt decreases -> balance decreases
+        // If receipt (payment to customer): we pay them -> their debt increases -> balance increases
+        // Wait, the user terminology: 
+        // Customer "Submit Receipt" (دریافت) -> We receive money -> Balance decreases
+        // Customer "Submit Payment" (پرداخت) -> We pay them -> Balance increases
+        
+        // In the existing code, addCustomerPayment used type: 'payment' for receiving money.
+        // So for customers: 'payment' means "Receipt from customer" (Balance decreases)
+        // I'll add 'receipt' for "Payment to customer" (Balance increases)
+        
+        const multiplier = type === 'payment' ? -1 : 1;
+        
         const newB = { 
-            AFN: c.balanceAFN - (cur === 'AFN' ? a : 0), 
-            USD: c.balanceUSD - (cur === 'USD' ? a : 0), 
-            IRT: c.balanceIRT - (cur === 'IRT' ? a : 0), 
-            Total: c.balance - baseAmount 
+            AFN: c.balanceAFN + (cur === 'AFN' ? a * multiplier : 0), 
+            USD: c.balanceUSD + (cur === 'USD' ? a * multiplier : 0), 
+            IRT: c.balanceIRT + (cur === 'IRT' ? a * multiplier : 0), 
+            Total: c.balance + (baseAmount * multiplier) 
         };
 
         await api.processPayment('customer', cid, newB, tx);
@@ -1611,10 +1633,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 }
             };
 
-            const addEmployeeAdvance = async (eid: string, a: number, d: string, cur: 'AFN' | 'USD' | 'IRT' = 'AFN', rate: number = 1) => {
+            const addEmployeeAdvance = async (eid: string, a: number, d: string, cur: 'AFN' | 'USD' | 'IRT' = 'AFN', rate: number = 1, customDate?: string) => {
                 const emp = state.employees.find(x => x.id === eid);
                 if (!emp) return;
-                const now = new Date().toISOString();
+                const now = customDate || new Date().toISOString();
                 const tx: PayrollTransaction = { id: crypto.randomUUID(), employeeId: eid, type: 'advance', amount: a, currency: cur, exchangeRate: rate, date: now, description: d };
                 
                 const config = state.storeSettings.currencyConfigs[cur];
@@ -1692,7 +1714,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const config = state.storeSettings.currencyConfigs[cur as 'AFN'|'IRT'|'USD'];
         const baseAmount = cur === state.storeSettings.baseCurrency ? e.amount : (config.method === 'multiply' ? e.amount / rate : e.amount * rate);
         
-        const finalExpense = { ...e, amountBase: baseAmount };
+        const finalExpense = { ...e, amountBase: baseAmount, date: e.date || new Date().toISOString() };
         api.addExpense(finalExpense).then(() => fetchData(true)); 
     };
 

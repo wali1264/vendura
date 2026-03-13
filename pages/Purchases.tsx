@@ -8,6 +8,7 @@ import PurchasePrintPreviewModal from '../components/PurchasePrintPreviewModal';
 import PackageUnitInput from '../components/PackageUnitInput';
 import ConfirmModal from '../components/ConfirmModal';
 import { formatCurrency, parseSpokenNumber, toEnglishDigits } from '../utils/formatters';
+import JalaliDateInput from '../components/JalaliDateInput';
 
 // Local Interface for Draft Items
 interface PurchaseItemDraft {
@@ -526,7 +527,7 @@ const Purchases: React.FC = () => {
                                     {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                 </select>
                                 <input value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} type="text" className="w-full h-12 p-3 bg-white/80 border border-gray-300 rounded-lg form-input outline-none focus:ring-4 focus:ring-blue-100" placeholder="شماره فاکتور (اختیاری)" />
-                                <input value={invoiceDate} onChange={e => setInvoiceDate(e.target.value)} type="date" className="w-full h-12 p-3 bg-white/80 border border-gray-300 rounded-lg form-input outline-none focus:ring-4 focus:ring-blue-100" required />
+                                <JalaliDateInput value={invoiceDate} onChange={setInvoiceDate} />
                            </div>
 
                            <div className="flex flex-col md:flex-row items-center gap-4 mb-6 bg-blue-50/50 p-4 rounded-2xl border border-blue-100">

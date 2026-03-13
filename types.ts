@@ -173,7 +173,7 @@ export interface Supplier {
 export interface SupplierTransaction {
     id: string;
     supplierId: string;
-    type: 'purchase' | 'payment' | 'purchase_return';
+    type: 'purchase' | 'payment' | 'receipt' | 'purchase_return';
     amount: number;
     date: string;
     description: string; // e.g., Invoice # or Payment to X
@@ -224,7 +224,7 @@ export interface Customer {
 export interface CustomerTransaction {
     id: string;
     customerId: string;
-    type: 'credit_sale' | 'payment' | 'sale_return';
+    type: 'credit_sale' | 'payment' | 'receipt' | 'sale_return';
     amount: number;
     date: string;
     description: string; // e.g., Invoice # or Payment received
