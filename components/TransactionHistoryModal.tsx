@@ -25,6 +25,7 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
     const [editDate, setEditDate] = useState('');
     const [editCurrency, setEditCurrency] = useState<'AFN'|'USD'|'IRT'>('AFN');
     const [editRate, setEditRate] = useState('');
+    const [editIsHistorical, setEditIsHistorical] = useState(false);
 
     // Safety check
     if (!person) return null;
@@ -90,6 +91,7 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
         setEditDate(t.date.split('T')[0]);
         setEditCurrency(t.currency || 'AFN');
         setEditRate(t.exchangeRate?.toString() || '');
+        setEditIsHistorical(!!t.isHistorical);
     };
 
     const handleSaveEdit = async () => {
@@ -100,7 +102,8 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
             description: editDescription,
             date: new Date(editDate).toISOString(),
             currency: editCurrency,
-            exchangeRate: editCurrency === storeSettings.baseCurrency ? 1 : Number(editRate)
+            exchangeRate: editCurrency === storeSettings.baseCurrency ? 1 : Number(editRate),
+            isHistorical: editIsHistorical
         };
 
         if (type === 'customer') {
@@ -155,7 +158,14 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
                     return (
                         <tr key={t.id} className="hover:bg-blue-50 transition-colors border-b last:border-0">
                             <td data-label="تاریخ" className="p-3 text-slate-600">{new Date(t.date).toLocaleDateString('fa-IR')}</td>
-                            <td data-label="شرح" className="p-3 text-slate-800 font-semibold">{t.description}</td>
+                            <td data-label="شرح" className="p-3 text-slate-800 font-semibold">
+                                <div className="flex items-center gap-2">
+                                    {t.description}
+                                    {(t as any).isHistorical && (
+                                        <span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-md border border-amber-200 font-black">تاریخی</span>
+                                    )}
+                                </div>
+                            </td>
                             <td data-label="بدهکار" className="p-3 text-blue-600 font-bold text-xl" dir="ltr">{debit > 0 ? `${debit.toLocaleString('en-US')} ${storeSettings.currencyConfigs[currency as 'AFN'|'USD'|'IRT']?.name || currency}` : '-'}</td>
                             <td data-label="بستانکار" className="p-3 text-red-600 font-bold text-xl" dir="ltr">{credit > 0 ? `${credit.toLocaleString('en-US')} ${storeSettings.currencyConfigs[currency as 'AFN'|'USD'|'IRT']?.name || currency}` : '-'}</td>
                             <td className="p-3 actions-cell">
@@ -293,6 +303,20 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
                                 <label className="text-xs font-bold text-slate-500">شرح:</label>
                                 <textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} className="w-full p-3 border border-slate-200 rounded-xl h-24 resize-none" />
                             </div>
+                            
+                            <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-xl border border-amber-100">
+                                <input 
+                                    type="checkbox" 
+                                    id="editIsHistorical" 
+                                    checked={editIsHistorical} 
+                                    onChange={(e) => setEditIsHistorical(e.target.checked)}
+                                    className="w-5 h-5 text-amber-600 rounded"
+                                />
+                                <label htmlFor="editIsHistorical" className="text-sm font-bold text-amber-800 cursor-pointer">
+                                    ثبت به عنوان داده‌های تاریخی (بدون تأثیر بر صندوق)
+                                </label>
+                            </div>
+
                             <button onClick={handleSaveEdit} className="w-full bg-blue-600 text-white p-4 rounded-xl font-black text-lg shadow-lg hover:bg-blue-700 transition-all">ذخیره تغییرات</button>
                         </div>
                     </div>

@@ -48,6 +48,7 @@ const SuppliersTab = () => {
     const [exchangeRate, setExchangeRate] = useState('');
     const [paymentAmount, setPaymentAmount] = useState('');
     const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split('T')[0]);
+    const [isHistorical, setIsHistorical] = useState(false);
 
     const showToast = (message: string) => { setToast(message); setTimeout(() => setToast(''), 3000); };
 
@@ -119,6 +120,7 @@ const SuppliersTab = () => {
         setExchangeRate(''); 
         setPaymentAmount(''); 
         setTransactionDate(new Date().toISOString().split('T')[0]);
+        setIsHistorical(false);
         setIsPayModalOpen(true); 
     };
 
@@ -131,7 +133,7 @@ const SuppliersTab = () => {
         if (!amount || amount <= 0) { showToast("مبلغ باید بزرگتر از صفر باشد."); return; }
         if (paymentCurrency !== baseCurrency && (!exchangeRate || Number(exchangeRate) <= 0)) { showToast("لطفاً نرخ ارز را وارد کنید."); return; }
         
-        const newTransaction = await addSupplierPayment(selectedSupplier.id, amount, description, paymentCurrency, paymentCurrency === baseCurrency ? 1 : Number(exchangeRate), transactionType, customDate);
+        const newTransaction = await addSupplierPayment(selectedSupplier.id, amount, description, paymentCurrency, paymentCurrency === baseCurrency ? 1 : Number(exchangeRate), transactionType, customDate, isHistorical);
         
         if (newTransaction) { 
             setIsPayModalOpen(false); 
@@ -336,6 +338,20 @@ const SuppliersTab = () => {
                         <input name="amount" type="text" inputMode="decimal" value={paymentAmount} onChange={e => setPaymentAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} placeholder={`مبلغ (${paymentCurrency})`} className="w-full p-4 border border-slate-200 rounded-xl font-bold text-center text-xl" required />
                         {paymentCurrency !== baseCurrency && convertedPayment > 0 && <p className="text-[10px] font-black text-emerald-600 text-left">معادل از حساب کل: {convertedPayment < 1 ? convertedPayment.toFixed(4) : convertedPayment.toLocaleString(undefined, { maximumFractionDigits: 2 })} {baseCurrencyName}</p>}
                         <input name="description" placeholder="توضیحات (اختیاری)" className="w-full p-4 border border-slate-200 rounded-xl" />
+                        
+                        <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-xl border border-amber-100">
+                            <input 
+                                type="checkbox" 
+                                id="isHistoricalSupplier" 
+                                checked={isHistorical} 
+                                onChange={(e) => setIsHistorical(e.target.checked)}
+                                className="w-5 h-5 text-amber-600 rounded"
+                            />
+                            <label htmlFor="isHistoricalSupplier" className="text-sm font-bold text-amber-800 cursor-pointer">
+                                ثبت به عنوان داده‌های تاریخی (بدون تأثیر بر صندوق)
+                            </label>
+                        </div>
+
                         <button type="submit" className={`w-full ${transactionType === 'payment' ? 'bg-emerald-600' : 'bg-blue-600'} text-white p-4 rounded-xl shadow-xl font-black text-lg active:scale-[0.98]`}>ثبت و چاپ رسید</button>
                     </form>
                 </Modal>
@@ -701,6 +717,7 @@ const CustomersTab = () => {
     const [exchangeRate, setExchangeRate] = useState('');
     const [paymentAmount, setPaymentAmount] = useState('');
     const [transactionDate, setTransactionDate] = useState(new Date().toISOString().split('T')[0]);
+    const [isHistorical, setIsHistorical] = useState(false);
     const [selectedTrusteeId, setSelectedTrusteeId] = useState<string>('');
     const [isTrusteeMenuOpen, setIsTrusteeMenuOpen] = useState(false);
     const trusteeMenuRef = useRef<HTMLDivElement>(null);
@@ -785,6 +802,7 @@ const CustomersTab = () => {
         setExchangeRate('');
         setPaymentAmount('');
         setTransactionDate(new Date().toISOString().split('T')[0]);
+        setIsHistorical(false);
         setSelectedTrusteeId('');
         setIsPayModalOpen(true);
     };
@@ -816,7 +834,8 @@ const CustomersTab = () => {
             paymentCurrency === baseCurrency ? 1 : Number(exchangeRate),
             selectedTrusteeId || undefined,
             transactionType,
-            customDate
+            customDate,
+            isHistorical
         );
         
         if (newTransaction) {
@@ -1124,6 +1143,20 @@ const CustomersTab = () => {
                             <p className={`text-[10px] font-black ${transactionType === 'payment' ? 'text-emerald-600' : 'text-red-600'} text-left`}>{transactionType === 'payment' ? 'معادل دریافتی' : 'معادل پرداختی'}: {convertedPayment < 1 ? convertedPayment.toFixed(4) : convertedPayment.toLocaleString(undefined, { maximumFractionDigits: 2 })} {baseCurrencyName}</p>
                         )}
                         <input name="description" placeholder="بابت... (اختیاری)" className="w-full p-4 border border-slate-200 rounded-xl" />
+                        
+                        <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-xl border border-amber-100">
+                            <input 
+                                type="checkbox" 
+                                id="isHistoricalCustomer" 
+                                checked={isHistorical} 
+                                onChange={(e) => setIsHistorical(e.target.checked)}
+                                className="w-5 h-5 text-amber-600 rounded"
+                            />
+                            <label htmlFor="isHistoricalCustomer" className="text-sm font-bold text-amber-800 cursor-pointer">
+                                ثبت به عنوان داده‌های تاریخی (بدون تأثیر بر صندوق)
+                            </label>
+                        </div>
+
                         <button type="submit" className={`w-full ${transactionType === 'payment' ? 'bg-emerald-600 shadow-emerald-100' : 'bg-red-600 shadow-red-100'} text-white p-4 rounded-xl shadow-xl font-black text-lg active:scale-[0.98]`}>ثبت نهایی و چاپ رسید</button>
                     </form>
                 </Modal>

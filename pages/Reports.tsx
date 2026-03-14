@@ -137,7 +137,15 @@ const Reports: React.FC = () => {
             return s;
         }, 0);
 
-        const cashInCollections = customerTransactions.filter(t => t.type === 'payment' && t.isCash !== false).reduce((s, t) => {
+        const cashInCollections = customerTransactions.filter(t => t.type === 'payment' && !t.isHistorical && t.isCash !== false).reduce((s, t) => {
+            const rate = (t as any).exchangeRate || 1;
+            const currency = (t as any).currency || baseCurrency;
+            const config = storeSettings.currencyConfigs[currency];
+            const amountBase = config?.method === 'multiply' ? t.amount / rate : t.amount * rate;
+            return s + amountBase;
+        }, 0);
+
+        const cashOutToCustomers = customerTransactions.filter(t => (t.type === 'receipt' || t.type === 'sale_return') && !t.isHistorical && t.isCash !== false).reduce((s, t) => {
             const rate = (t as any).exchangeRate || 1;
             const currency = (t as any).currency || baseCurrency;
             const config = storeSettings.currencyConfigs[currency];
@@ -152,7 +160,15 @@ const Reports: React.FC = () => {
             return s + amountBase;
         }, 0);
 
-        const cashOutSuppliers = supplierTransactions.filter(t => t.type === 'payment' && t.isCash !== false).reduce((s, t) => {
+        const cashOutSuppliers = supplierTransactions.filter(t => t.type === 'payment' && !t.isHistorical && t.isCash !== false).reduce((s, t) => {
+            const rate = (t as any).exchangeRate || 1;
+            const currency = (t as any).currency || baseCurrency;
+            const config = storeSettings.currencyConfigs[currency];
+            const amountBase = config?.method === 'multiply' ? t.amount / rate : t.amount * rate;
+            return s + amountBase;
+        }, 0);
+
+        const cashInFromSuppliers = supplierTransactions.filter(t => (t.type === 'receipt' || t.type === 'purchase_return') && !t.isHistorical && t.isCash !== false).reduce((s, t) => {
             const rate = (t as any).exchangeRate || 1;
             const currency = (t as any).currency || baseCurrency;
             const config = storeSettings.currencyConfigs[currency];
@@ -169,7 +185,7 @@ const Reports: React.FC = () => {
             return s + amountBase;
         }, 0);
 
-        return (cashInSales + cashInCollections + cashInDeposits) - (cashOutSuppliers + cashOutExpenses + cashOutDeposits);
+        return (cashInSales + cashInCollections + cashInDeposits + cashInFromSuppliers) - (cashOutSuppliers + cashOutExpenses + cashOutDeposits + cashOutToCustomers);
     }, [saleInvoices, customerTransactions, depositTransactions, supplierTransactions, expenses, storeSettings]);
 
     const financialPositionData = useMemo(() => {

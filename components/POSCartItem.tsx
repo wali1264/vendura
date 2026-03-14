@@ -5,7 +5,7 @@ import PackageUnitInput from './PackageUnitInput';
 import { toEnglishDigits } from '../utils/formatters';
 
 interface PriceEditorProps {
-    item: InvoiceItem;
+    item: CartItem;
     currency: 'AFN' | 'USD' | 'IRT';
     exchangeRate: string;
     storeSettings: StoreSettings;
@@ -16,7 +16,7 @@ interface PriceEditorProps {
 const CartItemPriceEditor: React.FC<PriceEditorProps> = ({ item, currency, exchangeRate, storeSettings, onSave, onCancel }) => {
     const config = storeSettings.currencyConfigs[currency];
     const rate = Number(exchangeRate) || 1;
-    const currentPriceAFN = item.finalPrice !== undefined ? item.finalPrice : item.salePrice;
+    const currentPriceAFN = item.finalPrice !== undefined ? item.finalPrice : (item.type === 'product' ? item.salePrice : item.price);
     
     // Initial value in transactional currency
     const initialDisplay = currency === storeSettings.baseCurrency ? currentPriceAFN : 
@@ -80,7 +80,7 @@ const POSCartItem: React.FC<POSCartItemProps> = ({
     
     const config = storeSettings.currencyConfigs[currency];
     const rate = Number(exchangeRate) || 1;
-    const priceAFN = (item.type === 'product' && item.finalPrice !== undefined) ? item.finalPrice : (item.type === 'product' ? item.salePrice : item.price);
+    const priceAFN = item.finalPrice !== undefined ? item.finalPrice : (item.type === 'product' ? item.salePrice : item.price);
     const originalPriceAFN = item.type === 'product' ? item.salePrice : item.price;
 
     // Convert prices for display
@@ -127,7 +127,7 @@ const POSCartItem: React.FC<POSCartItemProps> = ({
                     <p className="font-bold text-slate-800 text-sm md:text-lg leading-tight mb-1 break-words line-clamp-2" title={item.name}>{item.name}</p>
                     
                     <div className="flex flex-wrap items-center gap-2 text-sm">
-                        {item.type === 'product' && item.finalPrice !== undefined && item.finalPrice !== item.salePrice ? (
+                        {item.finalPrice !== undefined && item.finalPrice !== (item.type === 'product' ? item.salePrice : item.price) ? (
                             <>
                                 <span className="font-bold text-green-600">{displayPrice.toLocaleString()} {currencySuffix}</span>
                                 <s className="text-xs text-red-400">{displayOriginalPrice.toLocaleString()} {currencySuffix}</s>
@@ -168,7 +168,7 @@ const POSCartItem: React.FC<POSCartItemProps> = ({
                             </div>
                         )}
                         
-                        {item.type === 'product' && !isEditingPrice && hasPermission('pos:apply_discount') && (
+                        {!isEditingPrice && hasPermission('pos:apply_discount') && (
                             <button onClick={onStartPriceEdit} className="p-1 rounded-full hover:bg-slate-200/50 text-slate-400 hover:text-blue-600">
                                 <EditIcon className="w-4 h-4"/>
                             </button>
@@ -202,9 +202,9 @@ const POSCartItem: React.FC<POSCartItemProps> = ({
                 </div>
             </div>
             
-            {isEditingPrice && item.type === 'product' && (
+            {isEditingPrice && (
                 <CartItemPriceEditor
-                    item={item as InvoiceItem}
+                    item={item}
                     currency={currency}
                     exchangeRate={exchangeRate}
                     storeSettings={storeSettings}

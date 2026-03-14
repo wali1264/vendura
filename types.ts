@@ -32,6 +32,7 @@ export interface Service {
     id: string;
     name: string;
     price: number;
+    finalPrice?: number;
 }
 
 export type CartItem = (InvoiceItem & { type: 'product' }) | (Service & { quantity: number; type: 'service' });
@@ -188,6 +189,7 @@ export interface SupplierTransaction {
     isCash?: boolean; // NEW: To distinguish physical cash from intermediary settlements
     isManual?: boolean;
     isInitial?: boolean;
+    isHistorical?: boolean;
 }
 
 
@@ -246,6 +248,7 @@ export interface CustomerTransaction {
     isCash?: boolean; // NEW: To distinguish physical cash from intermediary settlements
     isManual?: boolean;
     isInitial?: boolean;
+    isHistorical?: boolean;
 }
 
 export type AnyTransaction = CustomerTransaction | SupplierTransaction | PayrollTransaction | DepositTransaction;

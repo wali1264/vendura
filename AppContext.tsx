@@ -88,14 +88,14 @@ interface AppContextType extends AppState {
     addSupplier: (supplier: Omit<Supplier, 'id' | 'balance' | 'balanceAFN' | 'balanceUSD' | 'balanceIRT'>, initialBalance?: { amount: number, type: 'creditor' | 'debtor', currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => void;
     updateSupplier: (supplier: Supplier, initialBalance?: { amount: number, type: 'creditor' | 'debtor', currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => Promise<void>;
     deleteSupplier: (id: string) => void;
-    addSupplierPayment: (supplierId: string, amount: number, description: string, currency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, type?: 'payment' | 'receipt', customDate?: string) => Promise<SupplierTransaction>;
+    addSupplierPayment: (supplierId: string, amount: number, description: string, currency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, type?: 'payment' | 'receipt', customDate?: string, isHistorical?: boolean) => Promise<SupplierTransaction>;
     updateSupplierTransaction: (transaction: SupplierTransaction) => Promise<void>;
     deleteSupplierTransaction: (transactionId: string) => Promise<void>;
     
     addCustomer: (customer: Omit<Customer, 'id' | 'balance' | 'balanceAFN' | 'balanceUSD' | 'balanceIRT'>, initialBalance?: { amount: number, type: 'creditor' | 'debtor', currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => void;
     updateCustomer: (customer: Customer, initialBalance?: { amount: number, type: 'creditor' | 'debtor', currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => Promise<void>;
     deleteCustomer: (id: string) => void;
-    addCustomerPayment: (customerId: string, amount: number, description: string, currency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, trusteeId?: string, type?: 'payment' | 'receipt', customDate?: string) => Promise<CustomerTransaction | null>;
+    addCustomerPayment: (customerId: string, amount: number, description: string, currency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, trusteeId?: string, type?: 'payment' | 'receipt', customDate?: string, isHistorical?: boolean) => Promise<CustomerTransaction | null>;
     updateCustomerTransaction: (transaction: CustomerTransaction) => Promise<void>;
     deleteCustomerTransaction: (transactionId: string) => Promise<void>;
     
@@ -1648,7 +1648,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         await fetchData(true);
     };
 
-    const addSupplierPayment = async (sid: string, a: number, d: string, cur: any = 'AFN', rate: number = 1, type: 'payment' | 'receipt' = 'payment', customDate?: string) => {
+    const addSupplierPayment = async (sid: string, a: number, d: string, cur: any = 'AFN', rate: number = 1, type: 'payment' | 'receipt' = 'payment', customDate?: string, isHistorical?: boolean) => {
         const s = state.suppliers.find(x => x.id === sid);
         const config = state.storeSettings.currencyConfigs[cur as 'AFN'|'USD'|'IRT'];
         const baseAmount = cur === state.storeSettings.baseCurrency ? a : (config.method === 'multiply' ? a / rate : a * rate);
@@ -1662,7 +1662,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             currency: cur,
             exchangeRate: rate,
             isCash: true,
-            isManual: true
+            isManual: true,
+            isHistorical: isHistorical
         };
         
         // If payment: we pay them -> our debt decreases -> balance decreases
@@ -1818,7 +1819,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         await fetchData(true);
     };
 
-    const addCustomerPayment = async (cid: string, a: number, d: string, cur: any = 'AFN', rate: number = 1, trusteeId?: string, type: 'payment' | 'receipt' = 'payment', customDate?: string) => {
+    const addCustomerPayment = async (cid: string, a: number, d: string, cur: any = 'AFN', rate: number = 1, trusteeId?: string, type: 'payment' | 'receipt' = 'payment', customDate?: string, isHistorical?: boolean) => {
         const c = state.customers.find(x => x.id === cid);
         if (!c) return null;
         
@@ -1834,7 +1835,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             currency: cur,
             exchangeRate: rate,
             isCash: !trusteeId, // If trustee is involved, it's not physical cash for us
-            isManual: true
+            isManual: true,
+            isHistorical: isHistorical
         };
         
         // If payment (receipt from customer): they pay us -> their debt decreases -> balance decreases
@@ -2041,7 +2043,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addProduct, updateProduct, deleteProduct, registerWastage, addOrder, updateOrderStatus, updateOrder, deleteOrder, addOrderPayment, addToCart, updateCartItemQuantity, updateCartItemFinalPrice, removeFromCart, completeSale,
         beginEditSale, cancelEditSale, addSaleReturn, addPurchaseInvoice, beginEditPurchase, cancelEditPurchase, updatePurchaseInvoice, addPurchaseReturn,
         addInTransitInvoice, updateInTransitInvoice, deleteInTransitInvoice, archiveInTransitInvoice, moveInTransitItems, addInTransitPayment,
-        updateSettings, addService, deleteService, addSupplier, updateSupplier, deleteSupplier, addSupplierPayment, addCustomer, updateCustomer, deleteCustomer, addCustomerPayment,
+        updateSettings, addService, deleteService, addSupplier, updateSupplier, deleteSupplier, addSupplierPayment, updateSupplierTransaction, deleteSupplierTransaction, addCustomer, updateCustomer, deleteCustomer, addCustomerPayment, updateCustomerTransaction, deleteCustomerTransaction,
         addEmployee, updateEmployee, deleteEmployee, toggleEmployeeActive, addEmployeeAdvance, addEmployeeAdvanceToEmployee, processAndPaySalaries, addExpense, updateExpense, deleteExpense, setInvoiceTransientCustomer,
         addDepositHolder, deleteDepositHolder, processDepositTransaction
     }}>{children}</AppContext.Provider>;
