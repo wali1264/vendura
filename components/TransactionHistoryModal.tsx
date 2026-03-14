@@ -86,9 +86,9 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
 
     const handleEditClick = (t: any) => {
         setEditingTransaction(t);
-        setEditAmount(t.amount.toString());
-        setEditDescription(t.description);
-        setEditDate(t.date.split('T')[0]);
+        setEditAmount((t.amount ?? 0).toString());
+        setEditDescription(t.description || '');
+        setEditDate(t.date ? t.date.split('T')[0] : new Date().toISOString().split('T')[0]);
         setEditCurrency(t.currency || 'AFN');
         setEditRate(t.exchangeRate?.toString() || '');
         setEditIsHistorical(!!t.isHistorical);
@@ -175,7 +175,7 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
                                             <PrintIcon className="w-5 h-5" />
                                         </button>
                                     )}
-                                    {(t as any).isManual && !t.isInitial && (
+                                    {(t as any).isManual && (
                                         <>
                                             <button onClick={() => handleEditClick(t)} className="p-2 rounded-full text-blue-500 hover:text-blue-700 hover:bg-blue-100 transition-colors" title="ویرایش">
                                                 <EditIcon className="w-5 h-5" />

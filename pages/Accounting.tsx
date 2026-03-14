@@ -73,20 +73,20 @@ const SuppliersTab = () => {
             phone: formData.get('phone') as string, 
         };
 
-        const initialBalance = initialAmount > 0 ? { 
+        const initialBalance = { 
             amount: initialAmount, 
             type: initialType, 
             currency: addSupplierCurrency, 
             exchangeRate: addSupplierCurrency === baseCurrency ? 1 : Number(addSupplierRate),
             date: addSupplierDate,
             description: addSupplierDescription
-        } : undefined;
+        };
 
         if (editingSupplier) {
             const updatedSupplier = { 
                 ...editingSupplier, 
                 ...supplierData,
-                initialBalance: initialAmount,
+                initialBalance: initialType === 'creditor' ? initialAmount : -initialAmount,
                 initialBalanceCurrency: addSupplierCurrency,
                 initialBalanceExchangeRate: addSupplierCurrency === baseCurrency ? 1 : Number(addSupplierRate),
                 initialBalanceDate: addSupplierDate,
@@ -750,20 +750,20 @@ const CustomersTab = () => {
             phone: formData.get('phone') as string,
         };
 
-        const initialBalance = initialAmount > 0 ? { 
+        const initialBalance = { 
             amount: initialAmount, 
             type: initialType,
             currency: addCustomerCurrency,
             exchangeRate: addCustomerCurrency === baseCurrency ? 1 : Number(addCustomerRate),
             date: addCustomerDate,
             description: addCustomerDescription
-        } : undefined;
+        };
 
         if (editingCustomer) {
             const updatedCustomer = {
                 ...editingCustomer,
                 ...customerData,
-                initialBalance: initialAmount,
+                initialBalance: initialType === 'debtor' ? initialAmount : -initialAmount,
                 initialBalanceCurrency: addCustomerCurrency,
                 initialBalanceExchangeRate: addCustomerCurrency === baseCurrency ? 1 : Number(addCustomerRate),
                 initialBalanceDate: addCustomerDate,

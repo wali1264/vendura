@@ -1479,38 +1479,46 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 ? amount 
                 : (configPay.method === 'multiply' ? amount / exchangeRate : amount * exchangeRate);
             
-            // Then, convert from base back to the invoice currency using the invoice's own historical rate
-            const invoiceRate = inv.exchangeRate || 1;
-            const configInv = state.storeSettings.currencyConfigs[inv.currency || state.storeSettings.baseCurrency];
-            
-            amountInInvoiceCurrency = inv.currency === state.storeSettings.baseCurrency 
-                ? amountInBase 
-                : (configInv.method === 'multiply' ? amountInBase * invoiceRate : amountInBase / invoiceRate);
+            // Then, convert from base to invoice currency
+            const configInv = state.storeSettings.currencyConfigs[inv.currency];
+            amountInInvoiceCurrency = inv.currency === state.storeSettings.baseCurrency
+                ? amountInBase
+                : (configInv.method === 'multiply' ? amountInBase * inv.exchangeRate : amountInBase / inv.exchangeRate);
         }
 
-        // 2. Create updated invoice object with the newly added payment (Immutable Update)
-        const updatedInv: InTransitInvoice = { 
-            ...inv, 
-            paidAmount: (inv.paidAmount || 0) + amountInInvoiceCurrency 
-        };
-
-        // 3. Persist the logistics update to the database first
-        await api.updateInTransit(updatedInv);
-        
-        // 4. Record the financial transaction in the supplier's account
-        // Note: addSupplierPayment internally calls fetchData(true) which refreshes the state
-        const tx = await addSupplierPayment(inv.supplierId, amount, description, currency, exchangeRate);
-        
-        return tx;
+        const tx = await addSupplierPayment(inv.supplierId, amount, description, currency, exchangeRate, 'payment', undefined, false);
+        if (tx) {
+            const updatedInv = { ...inv, payments: [...(inv.payments || []), { id: tx.id, amount: amountInInvoiceCurrency, date: tx.date }] };
+            await api.updateInTransit(updatedInv);
+            await fetchData(true);
+            return tx;
+        }
+        return null;
     };
 
-    // --- Basic Actions & Placeholders ---
-    const deleteUser = async (id: string) => { await api.deleteUser(id); await fetchData(true); };
-    const updateSettings = (n: any) => { api.updateSettings(n).then(() => fetchData(true)); };
-    const addService = (s: any) => { api.addService(s).then(() => fetchData(true)); };
-    const deleteService = (id: string) => { api.deleteService(id).then(() => fetchData(true)); };
-    
-    const addSupplier = (s: any, initial?: any) => { 
+    const deleteUser = async (userId: string) => {
+        await api.deleteUser(userId);
+        setState(prev => ({ ...prev, users: prev.users.filter(u => u.id !== userId) }));
+    };
+
+    const updateSettings = (newSettings: StoreSettings) => {
+        setState(prev => ({ ...prev, storeSettings: newSettings }));
+        api.updateSettings(newSettings);
+    };
+
+    const addService = (service: Omit<Service, 'id'>) => {
+        api.addService(service).then(ns => {
+            setState(prev => ({ ...prev, services: [...prev.services, ns] }));
+        });
+    };
+
+    const deleteService = (serviceId: string) => {
+        api.deleteService(serviceId).then(() => {
+            setState(prev => ({ ...prev, services: prev.services.filter(s => s.id !== serviceId) }));
+        });
+    };
+
+    const addSupplier = (s: any, initial?: any) => {
         api.addSupplier(s).then(ns => {
             if (initial && initial.amount > 0) {
                 const rate = initial.exchangeRate || 1;
@@ -1527,10 +1535,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     date: initial.date ? new Date(initial.date).toISOString() : new Date().toISOString(), 
                     description: initial.description || 'تراز اول دوره', 
                     currency: initial.currency,
+                    exchangeRate: rate,
                     isManual: true,
-                    isInitial: true
+                    isInitial: true,
+                    isHistorical: true
                 };
-                const newB = { AFN: initial.currency === 'AFN' ? (initial.type==='creditor'?initial.amount:-initial.amount) : 0, USD: initial.currency === 'USD' ? (initial.type==='creditor'?initial.amount:-initial.amount) : 0, IRT: initial.currency === 'IRT' ? (initial.type==='creditor'?initial.amount:-initial.amount) : 0, Total: initial.type === 'creditor' ? baseAmount : -baseAmount };
+                const multiplierNew = initial.type === 'creditor' ? 1 : -1;
+                const newB = { 
+                    AFN: initial.currency === 'AFN' ? initial.amount * multiplierNew : 0, 
+                    USD: initial.currency === 'USD' ? initial.amount * multiplierNew : 0, 
+                    IRT: initial.currency === 'IRT' ? initial.amount * multiplierNew : 0, 
+                    Total: baseAmount * multiplierNew 
+                };
                 api.processPayment('supplier', ns.id, newB, tx).then(() => fetchData(true));
             } else fetchData(true);
         });
@@ -1578,7 +1594,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     description: initial.description || 'تراز اول دوره', 
                     currency: initial.currency,
                     isManual: true,
-                    isInitial: true
+                    isInitial: true,
+                    isHistorical: true
                 };
                 
                 const multiplierNew = initial.type === 'creditor' ? 1 : -1;
@@ -1698,10 +1715,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     date: initial.date ? new Date(initial.date).toISOString() : new Date().toISOString(), 
                     description: initial.description || 'تراز اول دوره', 
                     currency: initial.currency,
+                    exchangeRate: rate,
                     isManual: true,
-                    isInitial: true
+                    isInitial: true,
+                    isHistorical: true
                 };
-                const newB = { AFN: initial.currency === 'AFN' ? (initial.type==='debtor'?initial.amount:-initial.amount) : 0, USD: initial.currency === 'USD' ? (initial.type==='debtor'?initial.amount:-initial.amount) : 0, IRT: initial.currency === 'IRT' ? (initial.type==='debtor'?initial.amount:-initial.amount) : 0, Total: initial.type === 'debtor' ? baseAmount : -baseAmount };
+                const multiplierNew = initial.type === 'debtor' ? 1 : -1;
+                const newB = { 
+                    AFN: initial.currency === 'AFN' ? initial.amount * multiplierNew : 0, 
+                    USD: initial.currency === 'USD' ? initial.amount * multiplierNew : 0, 
+                    IRT: initial.currency === 'IRT' ? initial.amount * multiplierNew : 0, 
+                    Total: baseAmount * multiplierNew 
+                };
                 api.processPayment('customer', nc.id, newB, tx).then(() => fetchData(true));
             } else fetchData(true);
         });
@@ -1749,7 +1774,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     description: initial.description || 'تراز اول دوره', 
                     currency: initial.currency,
                     isManual: true,
-                    isInitial: true
+                    isInitial: true,
+                    isHistorical: true
                 };
                 
                 const multiplierNew = initial.type === 'debtor' ? 1 : -1;
