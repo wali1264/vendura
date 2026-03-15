@@ -1,7 +1,7 @@
 import type { SalesMemoImage, Product, SaleInvoice, PurchaseInvoice, InTransitInvoice, Customer, Supplier, Employee, Expense, Service, StoreSettings, CustomerTransaction, SupplierTransaction, PayrollTransaction, ActivityLog, User, Role, DepositHolder, DepositTransaction } from '../types';
 
 const DB_NAME = 'KetabestanLocalDB';
-const DB_VERSION = 8; // Increment version for companies
+const DB_VERSION = 7; // Increment version for orders
 
 const STORES = {
   SALES_MEMOS: 'salesMemos',
@@ -22,7 +22,6 @@ const STORES = {
   ACTIVITY: 'activity_logs',
   WASTAGE_RECORDS: 'wastage_records',
   ORDERS: 'orders',
-  COMPANIES: 'companies',
   SETTINGS: 'store_settings',
   USERS: 'users',
   ROLES: 'roles'

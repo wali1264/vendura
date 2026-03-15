@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Product, ProductBatch, SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionErrorEvent } from '../types';
-import { XIcon, ChevronDownIcon, MicIcon, WarningIcon, ZapIcon, BuildingIcon } from './icons';
+import { XIcon, ChevronDownIcon, MicIcon, WarningIcon } from './icons';
 import { parseToPackageAndUnits, parseToTotalUnits, toEnglishDigits } from '../utils/formatters';
 import { useAppContext } from '../AppContext';
 
@@ -19,7 +19,6 @@ type FormState = {
     lotNumber: string;
     expiryDate: string;
     stock: number;
-    companyId: string;
 };
 
 
@@ -93,7 +92,7 @@ const FormInput: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label:
 );
 
 const ProductModal: React.FC<ProductModalProps> = ({ product, isBatchLocked = false, onClose, onSave }) => {
-    const { products, storeSettings, companies } = useAppContext();
+    const { products, storeSettings } = useAppContext();
     const productToFormState = (p: Product | null): FormState => {
         const firstBatch = p?.batches[0];
         return {
@@ -107,12 +106,10 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, isBatchLocked = fa
             lotNumber: firstBatch?.lotNumber || '',
             expiryDate: firstBatch?.expiryDate || '',
             stock: firstBatch?.stock || 0,
-            companyId: p?.companyId || '',
         };
     };
 
     const [formData, setFormData] = useState<FormState>(productToFormState(product));
-    const [showCompanySelect, setShowCompanySelect] = useState(false);
     const [stockPackages, setStockPackages] = useState('');
     const [stockUnits, setStockUnits] = useState('');
     const [isDetailsOpen, setIsDetailsOpen] = useState(!!(product?.barcode || product?.manufacturer || product?.batches[0]?.expiryDate));
@@ -281,7 +278,6 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, isBatchLocked = fa
                 itemsPerPackage: formData.itemsPerPackage ? Number(formData.itemsPerPackage) : 1,
                 barcode: formData.barcode?.trim() || undefined,
                 manufacturer: formData.manufacturer?.trim() || undefined,
-                companyId: formData.companyId || undefined,
             };
             const firstBatchData: FirstBatchData = {
                 purchasePrice: finalPurchasePriceBase,
@@ -289,7 +285,6 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, isBatchLocked = fa
                 lotNumber: formData.lotNumber.trim(),
                 purchaseDate: new Date().toISOString(),
                 expiryDate: formData.expiryDate || undefined,
-                companyId: formData.companyId || undefined,
             }
             if (product) {
                 onSave({ ...product, ...productData }, firstBatchData);
@@ -446,57 +441,10 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, isBatchLocked = fa
                             )}
                        </div>
                     </div>
-                     <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end">
+                     <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                         <FormInput label={`تعداد ${storeSettings.unitLabel || 'عدد'} در هر ${storeSettings.packageLabel || 'بسته'}`} id="itemsPerPackage" name="itemsPerPackage" type="text" inputMode="numeric" value={formData.itemsPerPackage} onChange={handleInputChange} placeholder="مثال: 12" onKeyDown={handleKeyDown} />
                         <FormInput label={`موجودی (${storeSettings.packageLabel || 'بسته'})`} id="stockPackages" name="stockPackages" type="text" inputMode="numeric" value={stockPackages} onInput={(e: any) => { const v = toEnglishDigits(e.target.value).replace(/[^0-9]/g, ''); setStockPackages(v); handleStockChange(v, stockUnits); }} disabled={Number(formData.itemsPerPackage) <= 1 || (!!product && isBatchLocked)} onKeyDown={handleKeyDown} error={errors.stock} />
-                        <div className="relative flex items-center gap-2">
-                            <div className="flex-grow">
-                                <FormInput label={`موجودی (${storeSettings.unitLabel || 'عدد'})`} id="stockUnits" name="stockUnits" type="text" inputMode="numeric" value={stockUnits} onInput={(e: any) => { const v = toEnglishDigits(e.target.value).replace(/[^0-9]/g, ''); setStockUnits(v); handleStockChange(stockPackages, v); }} disabled={!!product && isBatchLocked} onKeyDown={handleKeyDown} />
-                            </div>
-                            <div className="relative mb-1">
-                                <button 
-                                    type="button"
-                                    onClick={() => setShowCompanySelect(!showCompanySelect)}
-                                    className={`p-2.5 rounded-xl border-2 transition-all ${formData.companyId ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-slate-100 border-slate-200 text-slate-400 hover:bg-slate-200'}`}
-                                    title="انتخاب کمپانی"
-                                >
-                                    <ZapIcon className="w-5 h-5" />
-                                </button>
-                                {showCompanySelect && (
-                                    <div className="absolute bottom-full right-0 mb-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] p-2 animate-in slide-in-from-bottom-2 duration-200">
-                                        <div className="p-2 border-b border-slate-100 mb-1 flex justify-between items-center">
-                                            <span className="text-xs font-black text-slate-500">انتخاب کمپانی</span>
-                                            {formData.companyId && (
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => { setFormData(prev => ({ ...prev, companyId: '' })); setShowCompanySelect(false); }}
-                                                    className="text-[10px] text-rose-500 font-bold hover:underline"
-                                                >
-                                                    حذف انتخاب
-                                                </button>
-                                            )}
-                                        </div>
-                                        <div className="max-h-48 overflow-y-auto no-scrollbar">
-                                            {companies.length === 0 ? (
-                                                <div className="p-4 text-center text-slate-400 text-xs">کمپانی ثبت نشده است</div>
-                                            ) : (
-                                                companies.map(c => (
-                                                    <button
-                                                        key={c.id}
-                                                        type="button"
-                                                        onClick={() => { setFormData(prev => ({ ...prev, companyId: c.id })); setShowCompanySelect(false); }}
-                                                        className={`w-full text-right p-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-between ${formData.companyId === c.id ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50 text-slate-600'}`}
-                                                    >
-                                                        <span>{c.name}</span>
-                                                        {formData.companyId === c.id && <BuildingIcon className="w-4 h-4" />}
-                                                    </button>
-                                                ))
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                        <FormInput label={`موجودی (${storeSettings.unitLabel || 'عدد'})`} id="stockUnits" name="stockUnits" type="text" inputMode="numeric" value={stockUnits} onInput={(e: any) => { const v = toEnglishDigits(e.target.value).replace(/[^0-9]/g, ''); setStockUnits(v); handleStockChange(stockPackages, v); }} disabled={!!product && isBatchLocked} onKeyDown={handleKeyDown} />
                     </div>
 
                     <div className="border-t border-slate-200 pt-4">

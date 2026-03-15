@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { PurchaseInvoice, PurchaseInvoiceItem, Supplier, Product, SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionErrorEvent } from '../types';
 import { useAppContext } from '../AppContext';
-import { PlusIcon, EditIcon, TrashIcon, PrintIcon, WarningIcon, MicIcon, SearchIcon, XIcon, TruckIcon, ZapIcon, BuildingIcon } from '../components/icons';
+import { PlusIcon, EditIcon, TrashIcon, PrintIcon, WarningIcon, MicIcon, SearchIcon, XIcon, TruckIcon } from '../components/icons';
 import Toast from '../components/Toast';
 import DateRangeFilter from '../components/DateRangeFilter';
 import PurchasePrintPreviewModal from '../components/PurchasePrintPreviewModal';
@@ -18,7 +18,6 @@ interface PurchaseItemDraft {
     lotNumber: string;
     expiryDate: string;
     showExpiry: boolean;
-    companyId: string;
 }
 
 // Return Modal Component
@@ -81,7 +80,7 @@ const ReturnModal: React.FC<{ invoice: PurchaseInvoice, onClose: () => void, onS
 
 const Purchases: React.FC = () => {
     const { 
-        purchaseInvoices, suppliers, products, companies,
+        purchaseInvoices, suppliers, products, 
         addPurchaseInvoice, updatePurchaseInvoice, 
         editingPurchaseInvoiceId, beginEditPurchase, cancelEditPurchase,
         addPurchaseReturn, hasPermission, storeSettings
@@ -92,7 +91,6 @@ const Purchases: React.FC = () => {
     const [invoiceToPrint, setInvoiceToPrint] = useState<PurchaseInvoice | null>(null);
     const [returnModalInvoice, setReturnModalInvoice] = useState<PurchaseInvoice | null>(null);
     const [dateRange, setDateRange] = useState<{ start: Date, end: Date }>({ start: new Date(), end: new Date() });
-    const [activeCompanySelectIndex, setActiveCompanySelectIndex] = useState<number | null>(null);
 
     // Confirm Modal State
     const [confirmConfig, setConfirmConfig] = useState<{
@@ -222,8 +220,7 @@ const Purchases: React.FC = () => {
             purchasePrice: i.purchasePrice,
             lotNumber: i.lotNumber,
             expiryDate: i.expiryDate || '',
-            showExpiry: !!i.expiryDate,
-            companyId: i.companyId || ''
+            showExpiry: !!i.expiryDate
         })));
         setCurrency(invoice.currency || storeSettings.baseCurrency || 'AFN');
         setExchangeRate(invoice.exchangeRate ? String(invoice.exchangeRate) : '');
@@ -258,7 +255,6 @@ const Purchases: React.FC = () => {
             lotNumber: '',
             expiryDate: '',
             showExpiry: false,
-            companyId: product.companyId || '',
         };
         setItems(prev => [...prev, newItem]);
         setProductSearch('');
@@ -358,7 +354,6 @@ const Purchases: React.FC = () => {
             purchasePrice: Number(draft.purchasePrice || 0),
             lotNumber: draft.lotNumber.trim(),
             expiryDate: draft.expiryDate || undefined,
-            companyId: draft.companyId || undefined,
             atFactoryQty: 0, inTransitQty: 0, receivedQty: Number(draft.quantity || 0)
         }));
         
@@ -655,58 +650,13 @@ const Purchases: React.FC = () => {
                                                     {validation.isDuplicate && <p className="text-[10px] text-red-600 mt-1 font-bold">این شماره برای این کالا تکراری است!</p>}
                                                     {validation.isEmpty && <p className="text-[10px] text-amber-600 mt-1 font-bold">ورود لات برای انبارداری الزامی است.</p>}
                                                 </div>
-                                                <div className="col-span-2 md:col-span-1 flex items-end gap-2">
-                                                    <div className="flex-grow">
-                                                        <label className="text-xs font-bold text-slate-500 mb-2 block">تاریخ انقضا</label>
-                                                        {item.showExpiry ? (
-                                                            <input type="date" value={item.expiryDate} onChange={e => handleItemChange(index, 'expiryDate', e.target.value)} className="w-full h-12 p-3 bg-white/80 border border-gray-300 rounded-lg text-sm form-input outline-none focus:ring-4 focus:ring-blue-100 font-bold"/>
-                                                        ) : (
-                                                            <button onClick={() => handleItemChange(index, 'showExpiry', true)} className="w-full h-12 text-sm text-blue-600 font-bold bg-white/80 rounded-lg border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors">افزودن انقضا</button>
-                                                        )}
-                                                    </div>
-                                                    <div className="relative">
-                                                        <button 
-                                                            type="button"
-                                                            onClick={() => setActiveCompanySelectIndex(activeCompanySelectIndex === index ? null : index)}
-                                                            className={`h-12 w-12 flex items-center justify-center rounded-lg border-2 transition-all ${item.companyId ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-slate-100 border-slate-200 text-slate-400 hover:bg-slate-200'}`}
-                                                            title="انتخاب کمپانی"
-                                                        >
-                                                            <ZapIcon className="w-5 h-5" />
-                                                        </button>
-                                                        {activeCompanySelectIndex === index && (
-                                                            <div className="absolute bottom-full right-0 mb-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 z-[100] p-2 animate-in slide-in-from-bottom-2 duration-200">
-                                                                <div className="p-2 border-b border-slate-100 mb-1 flex justify-between items-center">
-                                                                    <span className="text-xs font-black text-slate-500">انتخاب کمپانی</span>
-                                                                    {item.companyId && (
-                                                                        <button 
-                                                                            type="button" 
-                                                                            onClick={() => { handleItemChange(index, 'companyId', ''); setActiveCompanySelectIndex(null); }}
-                                                                            className="text-[10px] text-rose-500 font-bold hover:underline"
-                                                                        >
-                                                                            حذف انتخاب
-                                                                        </button>
-                                                                    )}
-                                                                </div>
-                                                                <div className="max-h-48 overflow-y-auto no-scrollbar">
-                                                                    {companies.length === 0 ? (
-                                                                        <div className="p-4 text-center text-slate-400 text-xs">کمپانی ثبت نشده است</div>
-                                                                    ) : (
-                                                                        companies.map(c => (
-                                                                            <button
-                                                                                key={c.id}
-                                                                                type="button"
-                                                                                onClick={() => { handleItemChange(index, 'companyId', c.id); setActiveCompanySelectIndex(null); }}
-                                                                                className={`w-full text-right p-3 rounded-xl text-sm font-bold transition-colors flex items-center justify-between ${item.companyId === c.id ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50 text-slate-600'}`}
-                                                                            >
-                                                                                <span>{c.name}</span>
-                                                                                {item.companyId === c.id && <BuildingIcon className="w-4 h-4" />}
-                                                                            </button>
-                                                                        ))
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
+                                                <div className="col-span-2 md:col-span-1">
+                                                   <label className="text-xs font-bold text-slate-500 mb-2 block">تاریخ انقضا</label>
+                                                   {item.showExpiry ? (
+                                                    <input type="date" value={item.expiryDate} onChange={e => handleItemChange(index, 'expiryDate', e.target.value)} className="w-full h-12 p-3 bg-white/80 border border-gray-300 rounded-lg text-sm form-input outline-none focus:ring-4 focus:ring-blue-100 font-bold"/>
+                                                   ) : (
+                                                    <button onClick={() => handleItemChange(index, 'showExpiry', true)} className="w-full h-12 text-sm text-blue-600 font-bold bg-white/80 rounded-lg border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors">افزودن انقضا</button>
+                                                   )}
                                                 </div>
                                             </div>
                                         </div>

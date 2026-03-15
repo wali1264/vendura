@@ -4,7 +4,7 @@ import type {
     Product, ProductBatch, SaleInvoice, PurchaseInvoice, InTransitInvoice, Supplier, Customer, 
     Employee, Expense, Role, User, StoreSettings, ActivityLog, 
     CustomerTransaction, SupplierTransaction, PayrollTransaction, AppState, Service,
-    DepositHolder, DepositTransaction, Company
+    DepositHolder, DepositTransaction
 } from '../types';
 
 export interface AdminProfile {
@@ -258,11 +258,6 @@ export const api = {
         return records.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
     },
     addWastageRecord: async (record: any) => db.putItem(db.STORES.WASTAGE_RECORDS, record),
-
-    // --- Companies ---
-    getCompanies: async () => db.getAll<Company>(db.STORES.COMPANIES),
-    addCompany: async (company: Company) => db.putItem(db.STORES.COMPANIES, company),
-    deleteCompany: async (id: string) => db.deleteItem(db.STORES.COMPANIES, id),
 
     // --- Orders ---
     getOrders: async () => {

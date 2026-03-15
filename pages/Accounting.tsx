@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppContext } from '../AppContext';
 import type { Supplier, Employee, Customer, Expense, AnyTransaction, CustomerTransaction, SupplierTransaction, PayrollTransaction, DepositHolder } from '../types';
-import { PlusIcon, XIcon, EyeIcon, TrashIcon, UserGroupIcon, AccountingIcon, TruckIcon, ChevronDownIcon, CheckIcon, EditIcon, FilterIcon, SettingsIcon, ArchiveBoxXMarkIcon, CheckCircleIcon, BuildingIcon } from '../components/icons';
+import { PlusIcon, XIcon, EyeIcon, TrashIcon, UserGroupIcon, AccountingIcon, TruckIcon, ChevronDownIcon, CheckIcon, EditIcon, FilterIcon, SettingsIcon, ArchiveBoxXMarkIcon, CheckCircleIcon } from '../components/icons';
 import Toast from '../components/Toast';
 import { formatCurrency, toEnglishDigits, formatBalance } from '../utils/formatters';
 import TransactionHistoryModal from '../components/TransactionHistoryModal';
@@ -1485,100 +1485,6 @@ const CategoryManagerModal: React.FC<{ categories: string[], onClose: () => void
 };
 
 
-const CompaniesTab: React.FC = () => {
-    const { companies, addCompany, deleteCompany } = useAppContext();
-    const [newCompanyName, setNewCompanyName] = useState('');
-    const [isAdding, setIsAdding] = useState(false);
-
-    const handleAdd = async () => {
-        if (!newCompanyName.trim()) return;
-        const result = await addCompany(newCompanyName);
-        if (result.success) {
-            setNewCompanyName('');
-            setIsAdding(false);
-        } else {
-            alert(result.message);
-        }
-    };
-
-    return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h2 className="text-2xl font-black text-slate-800">مدیریت کمپانی‌ها</h2>
-                    <p className="text-slate-500 mt-1">تعریف و مدیریت شرکت‌های تأمین‌کننده کالا</p>
-                </div>
-                <button 
-                    onClick={() => setIsAdding(true)}
-                    className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3.5 rounded-2xl font-black shadow-xl shadow-blue-100 hover:scale-[1.02] transition-all active:scale-95"
-                >
-                    <PlusIcon className="w-5 h-5" />
-                    <span>افزودن کمپانی جدید</span>
-                </button>
-            </div>
-
-            {isAdding && (
-                <div className="bg-slate-50 p-6 rounded-3xl border-2 border-dashed border-slate-200 flex flex-col md:flex-row gap-4 animate-in zoom-in-95 duration-300">
-                    <input 
-                        type="text"
-                        value={newCompanyName}
-                        onChange={(e) => setNewCompanyName(e.target.value)}
-                        placeholder="نام کمپانی را وارد کنید..."
-                        className="flex-grow p-4 rounded-2xl border-2 border-slate-200 focus:border-blue-500 outline-none font-bold text-lg"
-                        autoFocus
-                        onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-                    />
-                    <div className="flex gap-2">
-                        <button 
-                            onClick={handleAdd}
-                            className="bg-emerald-500 text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-emerald-100 hover:bg-emerald-600 transition-all"
-                        >
-                            ثبت
-                        </button>
-                        <button 
-                            onClick={() => setIsAdding(false)}
-                            className="bg-slate-200 text-slate-600 px-8 py-4 rounded-2xl font-black hover:bg-slate-300 transition-all"
-                        >
-                            انصراف
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {companies.length === 0 ? (
-                    <div className="col-span-full py-20 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-                        <BuildingIcon className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                        <p className="text-slate-400 font-bold text-lg">هنوز هیچ کمپانی ثبت نشده است.</p>
-                    </div>
-                ) : (
-                    companies.map(company => (
-                        <div key={company.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                                    <BuildingIcon className="w-6 h-6" />
-                                </div>
-                                <span className="font-black text-lg text-slate-700">{company.name}</span>
-                            </div>
-                            <button 
-                                onClick={() => {
-                                    if(confirm(`آیا از حذف کمپانی "${company.name}" اطمینان دارید؟`)) {
-                                        deleteCompany(company.id);
-                                    }
-                                }}
-                                className="p-2 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
-                            >
-                                <TrashIcon className="w-5 h-5" />
-                            </button>
-                        </div>
-                    ))
-                )}
-            </div>
-        </div>
-    );
-};
-
-
 const Accounting: React.FC = () => {
     const { hasPermission } = useAppContext();
     const [activeTab, setActiveTab] = useState('suppliers');
@@ -1588,7 +1494,6 @@ const Accounting: React.FC = () => {
         { id: 'payroll', label: 'حقوق و دستمزد', icon: <UserGroupIcon className="w-5 h-5"/>, permission: 'accounting:manage_payroll' },
         { id: 'customers', label: 'مشتریان', icon: <UserGroupIcon className="w-5 h-5"/>, permission: 'accounting:manage_customers' },
         { id: 'expenses', label: 'مصارف', icon: <TrashIcon className="w-5 h-5"/>, permission: 'accounting:manage_expenses' },
-        { id: 'companies', label: 'کمپانی‌ها', icon: <BuildingIcon className="w-5 h-5"/>, permission: 'accounting:manage_suppliers' },
     ];
     
     const accessibleTabs = tabs.filter(tab => hasPermission(tab.permission));
@@ -1607,7 +1512,6 @@ const Accounting: React.FC = () => {
             case 'payroll': return <PayrollTab />;
             case 'customers': return <CustomersTab />;
             case 'expenses': return <ExpensesTab />;
-            case 'companies': return <CompaniesTab />;
             default: return null;
         }
     };
