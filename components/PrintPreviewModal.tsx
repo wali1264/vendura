@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { SaleInvoice, StoreSettings, CartItem, InvoiceItem, Customer } from '../types';
 import { XIcon, EditIcon, CheckIcon } from './icons';
 import { useAppContext } from '../AppContext';
+import { numberToPersianWords } from '../utils/formatters';
 
 interface PrintPreviewModalProps {
     invoice: SaleInvoice;
@@ -13,6 +14,7 @@ const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ invoice, onClose 
     const { storeSettings, customers, suppliers, setInvoiceTransientCustomer } = useAppContext();
     const [customCustomerName, setCustomCustomerName] = useState('');
     const [isEditingName, setIsEditingName] = useState(false);
+    const [showBalances, setShowBalances] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
     const customer = useMemo(() => {
@@ -20,6 +22,25 @@ const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ invoice, onClose 
         if (invoice.supplierIntermediaryId) return suppliers.find(s => s.id === invoice.supplierIntermediaryId);
         return null;
     }, [invoice.customerId, invoice.supplierIntermediaryId, customers, suppliers]);
+
+    const prevBalances = useMemo(() => {
+        if (!customer || !('balanceAFN' in customer)) return { AFN: 0, USD: 0, IRT: 0 };
+        
+        const isSale = invoice.type === 'sale';
+        const multiplier = isSale ? 1 : -1;
+        
+        const prev = {
+            AFN: (customer as Customer).balanceAFN,
+            USD: (customer as Customer).balanceUSD,
+            IRT: (customer as Customer).balanceIRT
+        };
+
+        if (invoice.currency === 'USD') prev.USD -= (invoice.totalAmount * multiplier);
+        else if (invoice.currency === 'IRT') prev.IRT -= (invoice.totalAmount * multiplier);
+        else prev.AFN -= (invoice.totalAmount * multiplier);
+
+        return prev;
+    }, [customer, invoice]);
 
     useEffect(() => {
         if (customer) {
@@ -175,29 +196,68 @@ const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ invoice, onClose 
                         </table>
                     </div>
 
-                    <div className="mt-2 pt-2 print:mt-4 flex justify-between items-start">
-                        <div className="w-1/2 space-y-1">
-                            {/* بخش وضعیت کل حساب مشتری طبق دستور حذف گردید تا در فاکتور چاپ نشود */}
-                        </div>
-                        <div className="w-1/2 text-left space-y-1 text-sm">
-                            {invoice.totalDiscount > 0 && (
-                                <>
-                                    <div className="flex justify-between px-2"><span className="font-semibold text-slate-600">جمع کل:</span><span dir="ltr">{invoice.subtotal.toLocaleString('fa-IR', { maximumFractionDigits: 3 })} {currencySuffix}</span></div>
-                                    <div className="flex justify-between px-2 text-green-600"><span className="font-semibold">مجموع تخفیف:</span><span dir="ltr">{invoice.totalDiscount.toLocaleString('fa-IR', { maximumFractionDigits: 3 })} {currencySuffix}</span></div>
-                                </>
+                    <div className="mt-2 pt-2 print:mt-4 flex justify-between items-start border-t border-black">
+                        <div className="w-1/2 space-y-1 text-right">
+                            {showBalances && customer && 'balanceAFN' in customer && (
+                                <div className="text-[10px] print:text-[8px] space-y-0.5 bg-slate-50 p-2 rounded border border-slate-200">
+                                    <p className="font-bold border-b border-slate-300 pb-0.5 mb-1 text-slate-700">وضعیت حساب قبلی مشتری:</p>
+                                    
+                                    <div className="flex justify-between gap-4">
+                                        <span className="text-slate-600">{storeSettings.currencyConfigs['AFN']?.name || 'افغانی'}:</span>
+                                        <span className={`font-bold ${prevBalances.AFN > 0 ? 'text-red-600' : prevBalances.AFN < 0 ? 'text-green-600' : 'text-slate-500'}`}>
+                                            {Math.abs(prevBalances.AFN).toLocaleString('fa-IR')} {prevBalances.AFN > 0 ? 'بدهکار' : prevBalances.AFN < 0 ? 'طلبکار' : 'تسویه'}
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="flex justify-between gap-4">
+                                        <span className="text-slate-600">{storeSettings.currencyConfigs['USD']?.name || 'دلار'}:</span>
+                                        <span className={`font-bold ${prevBalances.USD > 0 ? 'text-red-600' : prevBalances.USD < 0 ? 'text-green-600' : 'text-slate-500'}`}>
+                                            {Math.abs(prevBalances.USD).toLocaleString('fa-IR')} {prevBalances.USD > 0 ? 'بدهکار' : prevBalances.USD < 0 ? 'طلبکار' : 'تسویه'}
+                                        </span>
+                                    </div>
+                                    
+                                    <div className="flex justify-between gap-4">
+                                        <span className="text-slate-600">{storeSettings.currencyConfigs['IRT']?.name || 'تومان'}:</span>
+                                        <span className={`font-bold ${prevBalances.IRT > 0 ? 'text-red-600' : prevBalances.IRT < 0 ? 'text-green-600' : 'text-slate-500'}`}>
+                                            {Math.abs(prevBalances.IRT).toLocaleString('fa-IR')} {prevBalances.IRT > 0 ? 'بدهکار' : prevBalances.IRT < 0 ? 'طلبکار' : 'تسویه'}
+                                        </span>
+                                    </div>
+                                </div>
                             )}
-                            <div className="flex justify-between text-xl font-bold border-t border-black pt-2 mt-2 px-2 bg-slate-100 rounded">
-                                <span>مبلغ نهایی ({invoice.currency}):</span>
-                                <span className="text-blue-700" dir="ltr">{invoice.totalAmount.toLocaleString('fa-IR', { maximumFractionDigits: 3 })} {currencySuffix}</span>
+                        </div>
+                        <div className="w-1/2 flex flex-col items-center justify-center text-center px-2">
+                            <div className="flex items-center justify-center gap-2 text-lg print:text-xl font-bold text-slate-900">
+                                <span className="text-sm print:text-xs font-black">مبلغ نهایی:</span>
+                                <span className="text-blue-700 font-black" dir="ltr">({invoice.totalAmount.toLocaleString('fa-IR', { maximumFractionDigits: 3 })} {currencySuffix})</span>
+                            </div>
+                            <div className="text-[10px] print:text-[9px] text-slate-500 font-bold mt-1 border-t border-slate-100 pt-1 w-full line-clamp-2 leading-tight">
+                                مبلغ به حروف: {numberToPersianWords(invoice.totalAmount)} {currencySuffix}
                             </div>
                         </div>
                     </div>
                 </div>
                 <div className="flex justify-between items-center mt-4 print:hidden pt-2 border-t no-print">
-                    <button onClick={() => setIsEditingName(true)} className="flex items-center gap-2 px-4 py-3 rounded-lg bg-yellow-100 text-yellow-800 font-semibold"><EditIcon className="w-5 h-5" /><span className="hidden md:inline">ویرایش نام مشتری</span></button>
-                    <div className="flex space-x-3 space-x-reverse">
-                        <button onClick={handleClose} className="px-6 py-3 rounded-lg bg-gray-200 font-semibold">بستن</button>
-                        <button onClick={handlePrint} className="px-6 py-3 rounded-lg bg-blue-600 text-white shadow-lg btn-primary font-semibold">چاپ نهایی</button>
+                    <button onClick={() => setIsEditingName(true)} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-yellow-100 text-yellow-800 font-semibold text-xs hover:bg-yellow-200 transition-colors">
+                        <EditIcon className="w-4 h-4" />
+                        <span>ویرایش نام مشتری</span>
+                    </button>
+                    
+                    <div className="flex items-center gap-3">
+                        {customer && 'balanceAFN' in customer && (
+                            <label className="flex items-center gap-2 cursor-pointer bg-slate-100 px-3 py-2 rounded-lg hover:bg-slate-200 transition-colors border border-slate-200">
+                                <input 
+                                    type="checkbox" 
+                                    checked={showBalances} 
+                                    onChange={(e) => setShowBalances(e.target.checked)}
+                                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                />
+                                <span className="text-xs font-bold text-slate-700">نمایش مانده قبلی</span>
+                            </label>
+                        )}
+                        <div className="flex space-x-3 space-x-reverse">
+                            <button onClick={handleClose} className="px-6 py-3 rounded-lg bg-gray-200 font-semibold hover:bg-gray-300 transition-colors">بستن</button>
+                            <button onClick={handlePrint} className="px-6 py-3 rounded-lg bg-blue-600 text-white shadow-lg btn-primary font-semibold hover:bg-blue-700 transition-colors">چاپ نهایی</button>
+                        </div>
                     </div>
                 </div>
             </div>
