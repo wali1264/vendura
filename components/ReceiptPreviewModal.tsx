@@ -3,6 +3,7 @@ import type { StoreSettings, Supplier, Customer, AnyTransaction } from '../types
 import { XIcon } from './icons';
 import { useAppContext } from '../AppContext';
 import { formatCurrency, numberToPersianWords } from '../utils/formatters';
+import { formatJalaliDate } from '../utils/jalali';
 
 
 interface ReceiptPreviewModalProps {
@@ -39,7 +40,7 @@ const ReceiptPreviewModal: React.FC<ReceiptPreviewModalProps> = ({ person, trans
                      <h2 className="text-xl text-center font-black mb-8 bg-slate-100 p-3 rounded-xl border border-slate-200">{title}</h2>
                     <div className="flex flex-wrap justify-between gap-2 text-sm mb-6 px-2 bg-slate-50 p-3 rounded-lg border">
                         <p className="font-bold text-slate-600">شماره رسید: <span className="font-mono text-lg text-slate-900">{transaction.id.slice(0, 8)}</span></p>
-                        <p className="font-bold text-slate-600">تاریخ: <span className="text-slate-900">{new Date(transaction.date).toLocaleDateString('fa-IR', { year: 'numeric', month: 'long', day: 'numeric' })}</span></p>
+                        <p className="font-bold text-slate-600">تاریخ: <span className="text-slate-900">{formatJalaliDate(transaction.date)}</span></p>
                     </div>
                     <div className="space-y-5 text-md border-y border-dashed border-slate-300 py-8 px-5 bg-slate-50/50 rounded-2xl">
                         <p className="font-medium"><strong>{partyLabel}:</strong> محترم <span className="font-black text-xl text-blue-900">{personName}</span></p>

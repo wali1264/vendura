@@ -53,8 +53,16 @@ export const jalaliToDate = (jy: number, jm: number, jd: number) => {
 };
 
 export const JALALI_MONTHS = [
-    { value: 1, name: 'فروردین' }, { value: 2, name: 'اردیبهشت' }, { value: 3, name: 'خرداد' },
-    { value: 4, name: 'تیر' }, { value: 5, name: 'مرداد' }, { value: 6, name: 'شهریور' },
-    { value: 7, name: 'مهر' }, { value: 8, name: 'آبان' }, { value: 9, name: 'آذر' },
-    { value: 10, name: 'دی' }, { value: 11, name: 'بهمن' }, { value: 12, name: 'اسفند' }
+    { value: 1, name: 'فروردین (حمل)', afghanName: 'حمل' }, { value: 2, name: 'اردیبهشت (ثور)', afghanName: 'ثور' }, { value: 3, name: 'خرداد (جوزا)', afghanName: 'جوزا' },
+    { value: 4, name: 'تیر (سرطان)', afghanName: 'سرطان' }, { value: 5, name: 'مرداد (اسد)', afghanName: 'اسد' }, { value: 6, name: 'شهریور (سنبله)', afghanName: 'سنبله' },
+    { value: 7, name: 'مهر (میزان)', afghanName: 'میزان' }, { value: 8, name: 'آبان (عقرب)', afghanName: 'عقرب' }, { value: 9, name: 'آذر (قوس)', afghanName: 'قوس' },
+    { value: 10, name: 'دی (جدی)', afghanName: 'جدی' }, { value: 11, name: 'بهمن (دلو)', afghanName: 'دلو' }, { value: 12, name: 'اسفند (حوت)', afghanName: 'حوت' }
 ];
+
+export function formatJalaliDate(date: Date | string | number): string {
+    const d = new Date(date);
+    if (isNaN(d.getTime())) return '-';
+    const { jy, jm, jd } = getJalaliDate(d);
+    const month = JALALI_MONTHS.find(m => m.value === jm);
+    return `${jd} ${month ? month.name : ''} ${jy}`;
+}

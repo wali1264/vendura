@@ -174,6 +174,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const [isLoggingOut, setIsLoggingOut] = useState(false);
     const [isShopActive, setIsShopActive] = useState(() => localStorage.getItem('kasebyar_shop_active') === 'true');
     const [autoBackupEnabled, setAutoBackupEnabled] = useState(() => localStorage.getItem('kasebyar_auto_backup') === 'true');
+    const authRetryCount = useRef(0);
 
     const showToast = useCallback((message: string) => {
         console.log("Toast:", message);
@@ -353,8 +354,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const ownerIdentity = JSON.parse(cachedOwner);
             const profile = await api.getProfile(ownerIdentity.id);
             
-            if (!profile || !profile.is_approved) {
-                console.warn("Authorization revoked. Logging out...");
+            if (profile && profile.is_approved === true) {
+                authRetryCount.current = 0;
+                return;
+            }
+
+            // If profile is null or is_approved is false
+            authRetryCount.current += 1;
+            console.warn(`Authorization check failed. Attempt ${authRetryCount.current}/3`);
+
+            if (authRetryCount.current >= 3) {
+                console.error("Authorization revoked after 3 attempts. Logging out...");
                 
                 if (state.currentUser?.roleId === SYSTEM_SUPER_OWNER_ID) {
                     localStorage.setItem('kasebyar_pending_approval', 'true');
@@ -370,11 +380,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 setState(prev => ({ ...prev, isAuthenticated: false, currentUser: null }));
                 
                 supabase.auth.signOut().catch(() => {});
+                authRetryCount.current = 0;
+            } else {
+                // Retry in 60 seconds
+                setTimeout(checkAuthorization, 60000);
             }
         } catch (e) {
-            console.error("Auth check failed:", e);
+            console.error("Auth check encountered an error (likely network). Session preserved.", e);
         }
-    }, [state.currentUser]);
+    }, [state.currentUser, setIsShopActive]);
 
     useEffect(() => {
         let interval: any;
