@@ -24,6 +24,7 @@ type FormState = {
 
 interface ProductModalProps {
     product: Product | null;
+    isBatchLocked?: boolean;
     onClose: () => void;
     onSave: (productData: ProductFormData, firstBatchData: FirstBatchData) => void;
 }
@@ -90,7 +91,7 @@ const FormInput: React.FC<React.InputHTMLAttributes<HTMLInputElement> & { label:
     </div>
 );
 
-const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave }) => {
+const ProductModal: React.FC<ProductModalProps> = ({ product, isBatchLocked = false, onClose, onSave }) => {
     const { products, storeSettings } = useAppContext();
     const productToFormState = (p: Product | null): FormState => {
         const firstBatch = p?.batches[0];
@@ -365,7 +366,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
                                                 if (cur === storeSettings.baseCurrency) setPurchaseExchangeRate(''); 
                                             }}
                                             className={`px-2 py-0.5 text-[10px] font-black rounded ${purchaseCurrency === cur ? 'bg-white shadow-sm text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
-                                            disabled={!!product}
+                                            disabled={!!product && isBatchLocked}
                                         >
                                             {storeSettings.currencyConfigs[cur]?.name || cur}
                                         </button>
@@ -382,7 +383,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
                                     onChange={handleInputChange} 
                                     required 
                                     className={`flex-grow p-3 bg-white/80 border ${errors.purchasePrice ? 'border-red-500 ring-2 ring-red-50' : 'border-slate-300/80'} rounded-lg shadow-sm focus:ring-0 transition-all placeholder:text-slate-400 font-bold text-center form-input`}
-                                    disabled={!!product}
+                                    disabled={!!product && isBatchLocked}
                                 />
                                 {purchaseCurrency !== storeSettings.baseCurrency && !product && (
                                     <div className="w-24">
@@ -442,8 +443,8 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
                     </div>
                      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                         <FormInput label={`تعداد ${storeSettings.unitLabel || 'عدد'} در هر ${storeSettings.packageLabel || 'بسته'}`} id="itemsPerPackage" name="itemsPerPackage" type="text" inputMode="numeric" value={formData.itemsPerPackage} onChange={handleInputChange} placeholder="مثال: 12" onKeyDown={handleKeyDown} />
-                        <FormInput label={`موجودی (${storeSettings.packageLabel || 'بسته'})`} id="stockPackages" name="stockPackages" type="text" inputMode="numeric" value={stockPackages} onInput={(e: any) => { const v = toEnglishDigits(e.target.value).replace(/[^0-9]/g, ''); setStockPackages(v); handleStockChange(v, stockUnits); }} disabled={Number(formData.itemsPerPackage) <= 1 || !!product} onKeyDown={handleKeyDown} error={errors.stock} />
-                        <FormInput label={`موجودی (${storeSettings.unitLabel || 'عدد'})`} id="stockUnits" name="stockUnits" type="text" inputMode="numeric" value={stockUnits} onInput={(e: any) => { const v = toEnglishDigits(e.target.value).replace(/[^0-9]/g, ''); setStockUnits(v); handleStockChange(stockPackages, v); }} disabled={!!product} onKeyDown={handleKeyDown} />
+                        <FormInput label={`موجودی (${storeSettings.packageLabel || 'بسته'})`} id="stockPackages" name="stockPackages" type="text" inputMode="numeric" value={stockPackages} onInput={(e: any) => { const v = toEnglishDigits(e.target.value).replace(/[^0-9]/g, ''); setStockPackages(v); handleStockChange(v, stockUnits); }} disabled={Number(formData.itemsPerPackage) <= 1 || (!!product && isBatchLocked)} onKeyDown={handleKeyDown} error={errors.stock} />
+                        <FormInput label={`موجودی (${storeSettings.unitLabel || 'عدد'})`} id="stockUnits" name="stockUnits" type="text" inputMode="numeric" value={stockUnits} onInput={(e: any) => { const v = toEnglishDigits(e.target.value).replace(/[^0-9]/g, ''); setStockUnits(v); handleStockChange(stockPackages, v); }} disabled={!!product && isBatchLocked} onKeyDown={handleKeyDown} />
                     </div>
 
                     <div className="border-t border-slate-200 pt-4">
@@ -454,7 +455,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, onClose, onSave })
                         {isDetailsOpen && (
                             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-5 animate-fade-in">
                                 <FormInput label=" کد محصول (بارکد)" id="barcode" name="barcode" type="text" value={formData.barcode} onChange={handleInputChange} placeholder="اسکن بارکد" onKeyDown={handleKeyDown} />
-                                <FormInput label="تاریخ انقضا" id="expiryDate" name="expiryDate" type="date" value={formData.expiryDate} onChange={handleInputChange} onKeyDown={handleKeyDown} error={errors.expiryDate} disabled={!!product}/>
+                                <FormInput label="تاریخ انقضا" id="expiryDate" name="expiryDate" type="date" value={formData.expiryDate} onChange={handleInputChange} onKeyDown={handleKeyDown} error={errors.expiryDate} disabled={!!product && isBatchLocked}/>
                             </div>
                         )}
                     </div>

@@ -55,9 +55,22 @@ const Inventory: React.FC = () => {
         productData: Omit<Product, 'id' | 'batches'>,
         firstBatchData: Omit<ProductBatch, 'id'>
     ) => {
-        const result = editingProduct
-            ? updateProduct({ ...editingProduct, ...productData })
-            : addProduct(productData, firstBatchData);
+        let result;
+        if (editingProduct) {
+            const isLocked = saleInvoices.some(inv => 
+                inv.items.some(item => item.type === 'product' && item.id === editingProduct.id && 
+                item.batchDeductions?.some(d => d.batchId === editingProduct.batches[0]?.id))
+            );
+
+            const updatedProduct = { ...editingProduct, ...productData };
+            // If the first batch has no sales, we can update its details too
+            if (!isLocked && updatedProduct.batches.length > 0) {
+                updatedProduct.batches[0] = { ...updatedProduct.batches[0], ...firstBatchData };
+            }
+            result = updateProduct(updatedProduct);
+        } else {
+            result = addProduct(productData, firstBatchData);
+        }
 
         showToast(result.message);
         if (result.success) {
@@ -235,7 +248,17 @@ const Inventory: React.FC = () => {
                  )}
             </div>
 
-            {isProductModalOpen && <ProductModal product={editingProduct} onClose={() => setIsProductModalOpen(false)} onSave={handleSaveProduct} />}
+            {isProductModalOpen && (
+                <ProductModal 
+                    product={editingProduct} 
+                    isBatchLocked={editingProduct ? saleInvoices.some(inv => 
+                        inv.items.some(item => item.type === 'product' && item.id === editingProduct.id && 
+                        item.batchDeductions?.some(d => d.batchId === editingProduct.batches[0]?.id))
+                    ) : false}
+                    onClose={() => setIsProductModalOpen(false)} 
+                    onSave={handleSaveProduct} 
+                />
+            )}
             {isWastageModalOpen && wastageProduct && <WastageModal product={wastageProduct} onClose={() => setIsWastageModalOpen(false)} />}
 
         </div>

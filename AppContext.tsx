@@ -870,7 +870,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const updateCartItemFinalPrice = (id: string, type: any, price: number) => {
-        setState(prev => ({ ...prev, cart: prev.cart.map(i => (i.id === id && i.type === type && i.type === 'product') ? { ...i, finalPrice: price } : i) }));
+        setState(prev => ({ ...prev, cart: prev.cart.map(i => (i.id === id && i.type === type) ? { ...i, finalPrice: price } : i) }));
     };
 
     const removeFromCart = (id: string, type: any) => {
