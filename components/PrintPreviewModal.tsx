@@ -134,25 +134,25 @@ const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ invoice, onClose 
                         <p className="text-sm print:text-lg text-slate-800 mt-1 print:mt-2 font-bold bg-slate-100 inline-block px-4 py-1 rounded-full border">فاکتور فروش</p>
                     </div>
                     
-                    <div className="flex flex-wrap justify-between gap-2 text-xs print:text-[10px] mb-2 print:mb-4 bg-slate-50 p-2 print:p-2 rounded-lg border">
-                        <div className="space-y-0.5 print:space-y-1 w-full md:w-1/2">
-                            <div className="text-sm print:text-md border-b border-slate-300 pb-1 mb-1 flex items-center flex-wrap gap-2 min-h-[24px] print:min-h-[30px]">
+                    <div className="flex flex-wrap justify-between gap-1 text-[10px] print:text-[8px] mb-1 print:mb-2 bg-slate-50 p-1 print:p-1 rounded-lg border">
+                        <div className="space-y-0 w-full md:w-1/2">
+                            <div className="text-xs print:text-sm border-b border-slate-300 pb-0.5 mb-0.5 flex items-center flex-wrap gap-2">
                                 <strong>نام مشتری:</strong> 
                                 {isEditingName ? (
                                     <input 
                                         ref={inputRef}
                                         value={customCustomerName}
                                         onChange={(e) => setCustomCustomerName(e.target.value)}
-                                        className="border-b-2 border-blue-500 outline-none px-2 py-1 text-blue-800 font-bold bg-blue-50 rounded flex-grow max-w-[200px]"
+                                        className="border-b-2 border-blue-500 outline-none px-2 py-0.5 text-blue-800 font-bold bg-blue-50 rounded flex-grow max-w-[200px]"
                                         placeholder="نام مشتری..."
                                     />
                                 ) : (
-                                    <span className="font-bold text-base print:text-lg text-blue-800">{customCustomerName || 'مشتری گذری'}</span>
+                                    <span className="font-bold text-sm print:text-md text-blue-800">{customCustomerName || 'مشتری گذری'}</span>
                                 )}
                             </div>
-                            <p><strong>شماره فاکتور:</strong> <span className="font-mono font-bold">{invoice.id}</span></p>
+                            <p className="leading-none"><strong>شماره فاکتور:</strong> <span className="font-mono font-bold">{invoice.id}</span></p>
                         </div>
-                        <div className="text-left space-y-0.5 print:space-y-1 w-full md:w-auto">
+                        <div className="text-left space-y-0 w-full md:w-auto leading-none">
                             <p><strong>تاریخ:</strong> {new Date(invoice.timestamp).toLocaleDateString('fa-IR')}</p>
                             <p><strong>ارز معامله:</strong> <span className="font-bold">{invoice.currency}</span></p>
                         </div>
@@ -243,17 +243,16 @@ const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ invoice, onClose 
                     </button>
                     
                     <div className="flex items-center gap-3">
-                        {customer && 'balanceAFN' in customer && (
-                            <label className="flex items-center gap-2 cursor-pointer bg-slate-100 px-3 py-2 rounded-lg hover:bg-slate-200 transition-colors border border-slate-200">
-                                <input 
-                                    type="checkbox" 
-                                    checked={showBalances} 
-                                    onChange={(e) => setShowBalances(e.target.checked)}
-                                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                />
-                                <span className="text-xs font-bold text-slate-700">نمایش مانده قبلی</span>
-                            </label>
-                        )}
+                        <label className={`flex items-center gap-2 cursor-pointer bg-slate-100 px-3 py-2 rounded-lg hover:bg-slate-200 transition-colors border border-slate-200 ${(!customer || !('balanceAFN' in customer)) ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                            <input 
+                                type="checkbox" 
+                                checked={showBalances} 
+                                disabled={!customer || !('balanceAFN' in customer)}
+                                onChange={(e) => setShowBalances(e.target.checked)}
+                                className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            />
+                            <span className="text-xs font-bold text-slate-700">نمایش مانده قبلی</span>
+                        </label>
                         <div className="flex space-x-3 space-x-reverse">
                             <button onClick={handleClose} className="px-6 py-3 rounded-lg bg-gray-200 font-semibold hover:bg-gray-300 transition-colors">بستن</button>
                             <button onClick={handlePrint} className="px-6 py-3 rounded-lg bg-blue-600 text-white shadow-lg btn-primary font-semibold hover:bg-blue-700 transition-colors">چاپ نهایی</button>
