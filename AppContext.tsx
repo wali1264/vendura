@@ -932,7 +932,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         // 3. Financial Totals (Dynamic Logic)
         const totalBaseAmount = cart.reduce((t, i) => {
-            const price = (i.type === 'product' && i.finalPrice !== undefined) ? i.finalPrice : (i.type === 'product' ? i.salePrice : i.price);
+            const price = (i.finalPrice !== undefined) ? i.finalPrice : (i.type === 'product' ? i.salePrice : i.price);
             return (price * i.quantity) + t;
         }, 0);
 
@@ -1088,7 +1088,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             if (!originalItem) throw new Error("کالا در فاکتور اصلی یافت نشد.");
             if (ret.quantity > originalItem.quantity) throw new Error("تعداد مرجوعی بیش از تعداد فروخته شده است.");
 
-            const itemPriceBase = (originalItem.type === 'product' && originalItem.finalPrice !== undefined) ? originalItem.finalPrice : (originalItem.type === 'product' ? originalItem.salePrice : originalItem.price);
+            const itemPriceBase = (originalItem.finalPrice !== undefined) ? originalItem.finalPrice : (originalItem.type === 'product' ? originalItem.salePrice : originalItem.price);
             const rate = originalInv.exchangeRate || 1;
             
             // Re-calculate the transactional price for returning

@@ -83,7 +83,7 @@ const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ invoice, onClose 
 
         const baseCurrency = storeSettings.baseCurrency;
         const currencyConfig = storeSettings.currencyConfigs[invoice.currency];
-        let priceBase = (item.type === 'product' && item.finalPrice !== undefined) ? item.finalPrice : (item.type === 'product' ? item.salePrice : item.price);
+        let priceBase = (item.finalPrice !== undefined) ? item.finalPrice : (item.type === 'product' ? item.salePrice : item.price);
         
         let unitPriceDisplay = 0;
         if (invoice.currency === baseCurrency) {

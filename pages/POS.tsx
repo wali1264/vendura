@@ -60,7 +60,7 @@ const ProductSide: React.FC<{
     const baseCurrencyName = storeSettings.currencyConfigs?.[baseCurrency]?.name || 'AFN';
 
     const cartTotalBase = cart.reduce((total, item) => {
-        const price = (item.type === 'product' && item.finalPrice !== undefined) ? item.finalPrice : (item.type === 'product' ? item.salePrice : item.price);
+        const price = (item.finalPrice !== undefined) ? item.finalPrice : (item.type === 'product' ? item.salePrice : item.price);
         return total + (price * item.quantity);
     }, 0);
 
@@ -751,7 +751,7 @@ const POS: React.FC = () => {
 
     // Total amount in base currency for the whole cart
     const totalAmountBase = cart.reduce((total, item) => {
-        const price = (item.type === 'product' && item.finalPrice !== undefined) ? item.finalPrice : (item.type === 'product' ? item.salePrice : item.price);
+        const price = (item.finalPrice !== undefined) ? item.finalPrice : (item.type === 'product' ? item.salePrice : item.price);
         return total + price * item.quantity;
     }, 0);
 
