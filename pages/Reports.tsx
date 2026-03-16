@@ -5,7 +5,7 @@ import DateRangeFilter from '../components/DateRangeFilter';
 import { formatCurrency, formatStockToPackagesAndUnits } from '../utils/formatters';
 import type { Product, SaleInvoice, User, Customer, Supplier, CustomerTransaction, SupplierTransaction, InTransitInvoice, Expense, CartItem, InvoiceItem } from '../types';
 import TransactionHistoryModal from '../components/TransactionHistoryModal';
-import { PrintIcon, WarningIcon, UserGroupIcon, InventoryIcon, AccountingIcon, POSIcon, ReportsIcon, DashboardIcon, TruckIcon, SafeIcon, ChartBarIcon, SearchIcon, ArchiveBoxXMarkIcon } from '../components/icons';
+import { PrintIcon, WarningIcon, UserGroupIcon, InventoryIcon, AccountingIcon, POSIcon, ReportsIcon, DashboardIcon, TruckIcon, SafeIcon, ChartBarIcon, SearchIcon, ArchiveBoxXMarkIcon, BuildingIcon } from '../components/icons';
 import ReportPrintPreviewModal from '../components/ReportPrintPreviewModal';
 
 const Reports: React.FC = () => {
@@ -394,6 +394,7 @@ const Reports: React.FC = () => {
         { id: 'financial_position', label: 'ترازنامه', icon: <AccountingIcon className="w-5 h-5"/> },
         { id: 'accounts', label: 'وصولی‌ها', icon: <UserGroupIcon className="w-5 h-5"/> },
         { id: 'item_stats', label: 'آمار کالاها', icon: <ChartBarIcon className="w-5 h-5"/> },
+        { id: 'company_performance', label: 'عملکرد کمپانی‌ها', icon: <BuildingIcon className="w-5 h-5"/> },
         { id: 'employees', label: 'فعالیت‌ها', icon: <ReportsIcon className="w-5 h-5"/> },
         { id: 'wastage', label: 'ضایعات', icon: <ArchiveBoxXMarkIcon className="w-5 h-5"/> },
     ];
@@ -824,6 +825,144 @@ const Reports: React.FC = () => {
                                         )}
                                     </tbody>
                                 </table>
+                            </div>
+                        </div>
+                    </div>
+                );
+            case 'company_performance':
+                const { companies } = useAppContext();
+                
+                // 1. Filtered Data
+                const perfPurchases = purchaseInvoices.filter(inv => {
+                    const t = new Date(inv.timestamp).getTime();
+                    const inRange = t >= dateRange.start.getTime() && t <= dateRange.end.getTime();
+                    const matchCompany = !selectedEntityId || inv.companyId === selectedEntityId;
+                    return inRange && matchCompany;
+                });
+
+                const perfSales = saleInvoices.filter(inv => {
+                    const t = new Date(inv.timestamp).getTime();
+                    const inRange = t >= dateRange.start.getTime() && t <= dateRange.end.getTime();
+                    return inRange && inv.type === 'sale';
+                });
+
+                const perfWastage = (wastageRecords || []).filter(w => {
+                    const t = new Date(w.timestamp).getTime();
+                    return t >= dateRange.start.getTime() && t <= dateRange.end.getTime();
+                });
+
+                // 2. Aggregate Stats
+                let totalPurchaseVal = 0;
+                let totalInventoryVal = 0;
+                let totalSalesVal = 0;
+                let totalCOGSVal = 0;
+                let totalWastageVal = 0;
+
+                // Purchases
+                perfPurchases.forEach(inv => {
+                    inv.items.forEach(item => {
+                        if (selectedProductId && item.productId !== selectedProductId) return;
+                        const rate = inv.exchangeRate || 1;
+                        const config = storeSettings.currencyConfigs[inv.currency || storeSettings.baseCurrency];
+                        const priceBase = (inv.currency || storeSettings.baseCurrency) === storeSettings.baseCurrency ? item.purchasePrice : (config?.method === 'multiply' ? item.purchasePrice / rate : item.purchasePrice * rate);
+                        totalPurchaseVal += priceBase * item.quantity;
+                    });
+                });
+
+                // Inventory (Current State)
+                products.forEach(p => {
+                    if (selectedEntityId && p.companyId !== selectedEntityId) return;
+                    if (selectedProductId && p.id !== selectedProductId) return;
+                    p.batches.forEach(b => {
+                        totalInventoryVal += b.stock * b.purchasePrice;
+                    });
+                });
+
+                // Sales & COGS
+                perfSales.forEach(inv => {
+                    inv.items.forEach(item => {
+                        if (item.type !== 'product') return;
+                        const product = products.find(p => p.id === item.id);
+                        if (selectedEntityId && product?.companyId !== selectedEntityId) return;
+                        if (selectedProductId && item.id !== selectedProductId) return;
+                        
+                        const rate = inv.exchangeRate || 1;
+                        const config = storeSettings.currencyConfigs[inv.currency];
+                        const salePriceBase = inv.totalAmountAFN ? (item.finalPrice ?? item.salePrice) : (config?.method === 'multiply' ? (item.finalPrice ?? item.salePrice) / rate : (item.finalPrice ?? item.salePrice) * rate);
+                        
+                        totalSalesVal += salePriceBase * item.quantity;
+                        totalCOGSVal += (item.purchasePrice || 0) * item.quantity;
+                    });
+                });
+
+                // Wastage
+                perfWastage.forEach(w => {
+                    const product = products.find(p => p.id === w.productId);
+                    if (selectedEntityId && product?.companyId !== selectedEntityId) return;
+                    if (selectedProductId && w.productId !== selectedProductId) return;
+                    totalWastageVal += w.totalCost;
+                });
+
+                const netProfit = totalSalesVal - totalCOGSVal - totalWastageVal;
+
+                return (
+                    <div className="space-y-6">
+                        {/* Filters */}
+                        <div className="flex flex-wrap gap-4 bg-slate-50/80 p-4 rounded-3xl border border-slate-100 shadow-sm">
+                            <div className="relative flex-grow md:flex-none md:w-64">
+                                <select 
+                                    value={selectedEntityId}
+                                    onChange={(e) => setSelectedEntityId(e.target.value)}
+                                    className="w-full p-3 pr-10 bg-white rounded-xl border border-slate-200 text-sm font-bold shadow-sm focus:ring-4 focus:ring-blue-50 outline-none appearance-none"
+                                >
+                                    <option value="">همه کمپانی‌ها</option>
+                                    {companies.map(c => (
+                                        <option key={c.id} value={c.id}>{c.name}</option>
+                                    ))}
+                                </select>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                                    <BuildingIcon className="w-4 h-4" />
+                                </div>
+                            </div>
+                            <div className="relative flex-grow md:flex-none md:w-64">
+                                <select 
+                                    value={selectedProductId}
+                                    onChange={(e) => setSelectedProductId(e.target.value)}
+                                    className="w-full p-3 pr-10 bg-white rounded-xl border border-slate-200 text-sm font-bold shadow-sm focus:ring-4 focus:ring-blue-50 outline-none appearance-none"
+                                >
+                                    <option value="">همه محصولات</option>
+                                    {products
+                                        .filter(p => !selectedEntityId || p.companyId === selectedEntityId)
+                                        .map(p => (
+                                            <option key={p.id} value={p.id}>{p.name}</option>
+                                        ))}
+                                </select>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                                    <SearchIcon className="w-4 h-4" />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <SmartStatCard title="ارزش کل خرید" value={formatCurrency(totalPurchaseVal, storeSettings)} color="text-slate-700" icon={<TruckIcon/>} />
+                            <SmartStatCard title="ارزش موجودی انبار" value={formatCurrency(totalInventoryVal, storeSettings)} color="text-blue-600" icon={<InventoryIcon/>} />
+                            <SmartStatCard title="میزان فروش" value={formatCurrency(totalSalesVal, storeSettings)} color="text-emerald-600" icon={<POSIcon/>} />
+                            <SmartStatCard title="سود خالص" value={formatCurrency(netProfit, storeSettings)} color={netProfit >= 0 ? "text-green-600" : "text-red-600"} icon={<DashboardIcon/>} />
+                        </div>
+
+                        <div className="p-6 bg-slate-50 rounded-3xl border border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-orange-500 shadow-sm">
+                                    <ArchiveBoxXMarkIcon className="w-6 h-6" />
+                                </div>
+                                <div>
+                                    <h4 className="font-black text-slate-700">تأثیر ضایعات بر سود</h4>
+                                    <p className="text-xs text-slate-500 font-medium">ارزش کالاهای ضایعات شده از سود ناخالص کسر شده است.</p>
+                                </div>
+                            </div>
+                            <div className="text-right">
+                                <p className="text-sm font-bold text-slate-400 uppercase">ارزش ضایعات</p>
+                                <p className="text-2xl font-black text-red-500" dir="ltr">{formatCurrency(totalWastageVal, storeSettings)}</p>
                             </div>
                         </div>
                     </div>

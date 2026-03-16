@@ -71,11 +71,12 @@ interface POSCartItemProps {
     exchangeRate: string;
     saleInvoices: SaleInvoice[];
     selectedCustomerId: string;
+    editingInvoiceId?: string | null;
 }
 
 const POSCartItem: React.FC<POSCartItemProps> = ({
     item, isEditingPrice, storeSettings, hasPermission, onQuantityChange, onRemove, onStartPriceEdit, onSavePrice, onCancelPriceEdit,
-    currency, exchangeRate, saleInvoices, selectedCustomerId
+    currency, exchangeRate, saleInvoices, selectedCustomerId, editingInvoiceId
 }) => {
     
     const config = storeSettings.currencyConfigs[currency];
@@ -97,8 +98,9 @@ const POSCartItem: React.FC<POSCartItemProps> = ({
         if (!selectedCustomerId || item.type !== 'product') return null;
         
         // Find the most recent sale invoice for this customer that contains this product
+        // If we are editing, we exclude the current invoice from the search
         const lastInvoice = saleInvoices
-            .filter(inv => inv.customerId === selectedCustomerId && inv.type === 'sale')
+            .filter(inv => inv.customerId === selectedCustomerId && inv.type === 'sale' && inv.id !== editingInvoiceId)
             .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
             .find(inv => inv.items.some(it => it.id === item.id));
 

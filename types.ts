@@ -5,6 +5,7 @@ export interface ProductBatch {
   purchasePrice: number;
   purchaseDate: string; // ISO string, crucial for FIFO
   expiryDate?: string; // Optional ISO string
+  companyId?: string; // NEW: Link to company
 }
 
 
@@ -18,6 +19,7 @@ export interface Product {
   barcode?: string;
   manufacturer?: string;
   itemsPerPackage?: number;
+  companyId?: string; // NEW: Default company for the product
 }
 
 export interface InvoiceItem extends Product {
@@ -62,6 +64,7 @@ export interface PurchaseInvoiceItem {
     purchasePrice: number;
     lotNumber: string;
     expiryDate?: string;
+    companyId?: string; // NEW: Link to company
     // Phase 1: Lifecycle Tracking
     atFactoryQty: number;
     inTransitQty: number;
@@ -82,6 +85,7 @@ export interface PurchaseInvoice {
   sourceInTransitId?: string; // Phase 2: Link to parent shipment
   additionalCost?: number;
   costDescription?: string;
+  companyId?: string;
 }
 
 export interface InTransitInvoice extends Omit<PurchaseInvoice, 'type'> {
@@ -265,6 +269,11 @@ export interface Expense {
     relatedId?: string; // Link to purchase invoices or other entities
 }
 
+export interface Company {
+    id: string;
+    name: string;
+}
+
 export interface SalesMemoImage {
     id: number;
     imageData: string;
@@ -339,6 +348,7 @@ export interface AppState {
     activities: ActivityLog[];
     wastageRecords: WastageRecord[];
     orders: Order[];
+    companies: Company[];
     saleInvoiceCounter: number;
     editingSaleInvoiceId: string | null;
     editingPurchaseInvoiceId: string | null;

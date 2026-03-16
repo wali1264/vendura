@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppContext } from '../AppContext';
 import type { Supplier, Employee, Customer, Expense, AnyTransaction, CustomerTransaction, SupplierTransaction, PayrollTransaction, DepositHolder } from '../types';
-import { PlusIcon, XIcon, EyeIcon, TrashIcon, UserGroupIcon, AccountingIcon, TruckIcon, ChevronDownIcon, CheckIcon, EditIcon, FilterIcon, SettingsIcon, ArchiveBoxXMarkIcon, CheckCircleIcon } from '../components/icons';
+import { PlusIcon, XIcon, EyeIcon, TrashIcon, UserGroupIcon, AccountingIcon, TruckIcon, ChevronDownIcon, CheckIcon, EditIcon, FilterIcon, SettingsIcon, ArchiveBoxXMarkIcon, CheckCircleIcon, BuildingIcon } from '../components/icons';
 import Toast from '../components/Toast';
 import { formatCurrency, toEnglishDigits, formatBalance } from '../utils/formatters';
 import TransactionHistoryModal from '../components/TransactionHistoryModal';
@@ -204,7 +204,7 @@ const SuppliersTab = () => {
                                                     {formatBalance(item.val)} {item.name}
                                                 </span>
                                                 <span className="text-[10px] font-bold opacity-60">
-                                                    {item.val > 0 ? '(بدهکاریم)' : (item.val < 0 ? '(طلبکاریم)' : '(تسویه)')}
+                                                    {item.val > 0 ? '(بدهکاریم / برد)' : (item.val < 0 ? '(طلبکاریم / رسید)' : '(تسویه)')}
                                                 </span>
                                             </div>
                                         ))}
@@ -227,8 +227,8 @@ const SuppliersTab = () => {
                                         <button onClick={() => handleViewHistory(s)} className="p-2.5 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-blue-100 transition-all" title="مشاهده صورت حساب"><EyeIcon className="w-6 h-6"/></button>
                                         <button onClick={() => handleDelete(s)} className={`p-2.5 rounded-xl transition-all ${(Math.abs(s.balanceAFN || 0) === 0 && Math.abs(s.balanceUSD || 0) === 0 && Math.abs(s.balanceIRT || 0) === 0) ? 'text-red-500 hover:bg-red-50 cursor-pointer' : 'text-slate-300 cursor-not-allowed'}`} disabled={Math.abs(s.balanceAFN || 0) > 0 || Math.abs(s.balanceUSD || 0) > 0 || Math.abs(s.balanceIRT || 0) > 0}><TrashIcon className="w-6 h-6" /></button>
                                         <div className="flex flex-col gap-1">
-                                            <button onClick={() => handleOpenPayModal(s, 'payment')} className="bg-emerald-500 text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-emerald-200 transition-all active:scale-95">ثبت پرداخت</button>
-                                            <button onClick={() => handleOpenPayModal(s, 'receipt')} className="bg-blue-500 text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-blue-200 transition-all active:scale-95">ثبت دریافت</button>
+                                            <button onClick={() => handleOpenPayModal(s, 'payment')} className="bg-emerald-500 text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-emerald-200 transition-all active:scale-95">ثبت پرداخت / برد</button>
+                                            <button onClick={() => handleOpenPayModal(s, 'receipt')} className="bg-blue-500 text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-blue-200 transition-all active:scale-95">ثبت دریافت / رسید</button>
                                         </div>
                                     </div>
                                 </td>
@@ -259,15 +259,15 @@ const SuppliersTab = () => {
                                                 {formatBalance(item.val)} {item.name}
                                             </span>
                                             <span className="text-[10px] font-bold opacity-60">
-                                                {item.val > 0 ? '(بدهکاریم)' : (item.val < 0 ? '(طلبکاریم)' : '(تسویه)')}
+                                                {item.val > 0 ? '(بدهکاریم / برد)' : (item.val < 0 ? '(طلبکاریم / رسید)' : '(تسویه)')}
                                             </span>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                             <div className="flex flex-col gap-2">
-                                <button onClick={() => handleOpenPayModal(s, 'payment')} className="bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-lg active:shadow-none transition-all">ثبت پرداخت</button>
-                                <button onClick={() => handleOpenPayModal(s, 'receipt')} className="bg-blue-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-lg active:shadow-none transition-all">ثبت دریافت</button>
+                                <button onClick={() => handleOpenPayModal(s, 'payment')} className="bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-lg active:shadow-none transition-all">ثبت پرداخت / برد</button>
+                                <button onClick={() => handleOpenPayModal(s, 'receipt')} className="bg-blue-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-lg active:shadow-none transition-all">ثبت دریافت / رسید</button>
                             </div>
                         </div>
                     </div>
@@ -298,8 +298,8 @@ const SuppliersTab = () => {
                             <div className="flex gap-2">
                                 <input name="initialBalance" type="text" inputMode="decimal" value={addSupplierAmount} onChange={e => setAddSupplierAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} placeholder="مبلغ" className="w-2/3 p-2.5 border border-slate-200 rounded-xl outline-none" />
                                 <select name="balanceType" defaultValue={editingSupplier ? (editingSupplier.initialBalance && editingSupplier.initialBalance > 0 ? 'creditor' : 'debtor') : 'creditor'} className="w-1/3 p-2.5 border border-slate-200 rounded-xl bg-white text-xs font-bold">
-                                    <option value="creditor">ما بدهکاریم</option>
-                                    <option value="debtor">او بدهکار است</option>
+                                    <option value="creditor">ما بدهکاریم / برد</option>
+                                    <option value="debtor">او بدهکار است / رسید</option>
                                 </select>
                             </div>
                             <div className="space-y-2">
@@ -315,7 +315,7 @@ const SuppliersTab = () => {
             )}
 
             {isPayModalOpen && selectedSupplier && (
-                 <Modal title={`${transactionType === 'payment' ? 'ثبت پرداخت' : 'ثبت دریافت'}: ${selectedSupplier.name}`} onClose={() => setIsPayModalOpen(false)}>
+                 <Modal title={`${transactionType === 'payment' ? 'ثبت پرداخت / برد' : 'ثبت دریافت / رسید'}: ${selectedSupplier.name}`} onClose={() => setIsPayModalOpen(false)}>
                     <form onSubmit={handleAddPaymentForm} className="space-y-4">
                         <div className="flex gap-4 p-3 bg-blue-50 rounded-xl">
                             {['AFN', 'USD', 'IRT'].map(c => (
@@ -500,8 +500,8 @@ const PayrollTab = () => {
                             <th className="p-4 font-bold text-slate-700">عملیات</th>
                             <th className="p-4 font-bold text-slate-700 text-right">نام کارمند</th>
                             <th className="p-4 font-bold text-slate-700">حقوق ماهانه</th>
-                            <th className="p-4 font-bold text-slate-700">باقیمانده حقوق</th>
-                            <th className="p-4 font-bold text-slate-700">ثبت مساعده / پاداش</th>
+                            <th className="p-4 font-bold text-slate-700">باقیمانده حقوق / برد</th>
+                            <th className="p-4 font-bold text-slate-700">ثبت مساعده / پاداش / برد</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -606,7 +606,7 @@ const PayrollTab = () => {
                                         <input type="text" inputMode="decimal" name="amount" onInput={(e:any) => e.target.value = toEnglishDigits(e.target.value).replace(/[^0-9.]/g, '')} className="w-1/3 p-2.5 border border-slate-200 rounded-xl text-center text-sm font-bold" placeholder="مبلغ" required />
                                         <input type="text" name="description" className="w-2/3 p-2.5 border border-slate-200 rounded-xl text-xs" placeholder="توضیحات (اختیاری)" />
                                     </div>
-                                    <button type="submit" className="w-full bg-amber-500 text-white py-2.5 rounded-xl text-sm font-black shadow-md active:translate-y-0.5 transition-all">ثبت تراکنش مالی</button>
+                                    <button type="submit" className="w-full bg-amber-500 text-white py-2.5 rounded-xl text-sm font-black shadow-md active:translate-y-0.5 transition-all">ثبت تراکنش مالی / برد</button>
                                 </form>
                             </div>
                         )}
@@ -911,7 +911,7 @@ const CustomersTab = () => {
                                                     {item.val.toLocaleString('en-US')} {item.name}
                                                 </span>
                                                 <span className="text-[10px] font-bold opacity-60">
-                                                    {item.val > 0 ? '(طلبکاریم)' : (item.val < 0 ? '(بدهکاریم)' : '(تسویه)')}
+                                                    {item.val > 0 ? '(طلبکاریم / رسید)' : (item.val < 0 ? '(بدهکاریم / برد)' : '(تسویه)')}
                                                 </span>
                                             </div>
                                         ))}
@@ -938,8 +938,8 @@ const CustomersTab = () => {
                                             <TrashIcon className="w-6 h-6" />
                                         </button>
                                         <div className="flex flex-col gap-1">
-                                            <button onClick={() => handleOpenPayModal(c, 'payment')} className="bg-emerald-500 text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-emerald-200 transition-all active:scale-95">ثبت دریافت</button>
-                                            <button onClick={() => handleOpenPayModal(c, 'receipt')} className="bg-red-500 text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-red-200 transition-all active:scale-95">ثبت پرداخت</button>
+                                            <button onClick={() => handleOpenPayModal(c, 'payment')} className="bg-emerald-500 text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-emerald-200 transition-all active:scale-95">ثبت دریافت / رسید</button>
+                                            <button onClick={() => handleOpenPayModal(c, 'receipt')} className="bg-red-500 text-white px-4 py-1.5 rounded-xl text-xs font-bold shadow-md hover:shadow-red-200 transition-all active:scale-95">ثبت پرداخت / برد</button>
                                         </div>
                                      </div>
                                 </td>
@@ -989,15 +989,15 @@ const CustomersTab = () => {
                                                 {item.val.toLocaleString('en-US')} {item.name}
                                             </span>
                                             <span className="text-[10px] font-bold opacity-60">
-                                                {item.val > 0 ? '(طلبکاریم)' : (item.val < 0 ? '(بدهکاریم)' : '(تسویه)')}
+                                                {item.val > 0 ? '(طلبکاریم / رسید)' : (item.val < 0 ? '(بدهکاریم / برد)' : '(تسویه)')}
                                             </span>
                                         </div>
                                     ))}
                                 </div>
                             </div>
                             <div className="flex flex-col gap-2">
-                                <button onClick={() => handleOpenPayModal(c, 'payment')} className="bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-lg shadow-emerald-100 active:shadow-none transition-all">ثبت دریافت</button>
-                                <button onClick={() => handleOpenPayModal(c, 'receipt')} className="bg-red-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-lg shadow-red-100 active:shadow-none transition-all">ثبت پرداخت</button>
+                                <button onClick={() => handleOpenPayModal(c, 'payment')} className="bg-emerald-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-lg shadow-emerald-100 active:shadow-none transition-all">ثبت دریافت / رسید</button>
+                                <button onClick={() => handleOpenPayModal(c, 'receipt')} className="bg-red-500 text-white px-5 py-2 rounded-xl text-xs font-black shadow-lg shadow-red-100 active:shadow-none transition-all">ثبت پرداخت / برد</button>
                             </div>
                         </div>
                     </div>
@@ -1039,8 +1039,8 @@ const CustomersTab = () => {
                             <div className="flex gap-2">
                                 <input name="initialBalance" type="text" inputMode="decimal" value={addCustomerAmount} onChange={e => setAddCustomerAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} placeholder={`مبلغ (${addCustomerCurrency})`} className="w-2/3 p-2.5 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-50 font-bold" />
                                 <select name="balanceType" defaultValue={editingCustomer ? (editingCustomer.initialBalance && editingCustomer.initialBalance > 0 ? 'debtor' : 'creditor') : 'debtor'} className="w-1/3 p-2.5 border border-slate-200 rounded-xl bg-white text-xs font-black">
-                                    <option value="debtor">بدهکار است</option>
-                                    <option value="creditor">بستانکار است</option>
+                                    <option value="debtor">بدهکار است / برد</option>
+                                    <option value="creditor">بستانکار است / رسید</option>
                                 </select>
                             </div>
                             <div className="space-y-2">
@@ -1059,7 +1059,7 @@ const CustomersTab = () => {
 
             {isPayModalOpen && selectedCustomer && (
                  <Modal 
-                    title={`${transactionType === 'payment' ? 'دریافت وجه از' : 'پرداخت وجه به'}: ${selectedCustomer.name}`} 
+                    title={`${transactionType === 'payment' ? 'ثبت دریافت وجه / رسید از' : 'ثبت پرداخت وجه / برد به'}: ${selectedCustomer.name}`} 
                     onClose={() => setIsPayModalOpen(false)}
                     headerAction={
                         transactionType === 'payment' ? (
@@ -1138,9 +1138,9 @@ const CustomersTab = () => {
                             <JalaliDateInput value={transactionDate} onChange={setTransactionDate} disableRestriction />
                             <input type="hidden" name="transactionDate" value={transactionDate} />
                         </div>
-                        <input name="amount" type="text" inputMode="decimal" value={paymentAmount} onChange={e => setPaymentAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} placeholder={`${transactionType === 'payment' ? 'مبلغ دریافتی' : 'مبلغ پرداختی'} (${paymentCurrency})`} className={`w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 ${transactionType === 'payment' ? 'focus:ring-emerald-50' : 'focus:ring-red-50'} font-black text-xl text-center`} required />
+                        <input name="amount" type="text" inputMode="decimal" value={paymentAmount} onChange={e => setPaymentAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} placeholder={`${transactionType === 'payment' ? 'مبلغ دریافتی / رسید' : 'مبلغ پرداختی / برد'} (${paymentCurrency})`} className={`w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 ${transactionType === 'payment' ? 'focus:ring-emerald-50' : 'focus:ring-red-50'} font-black text-xl text-center`} required />
                         {paymentCurrency !== baseCurrency && convertedPayment > 0 && (
-                            <p className={`text-[10px] font-black ${transactionType === 'payment' ? 'text-emerald-600' : 'text-red-600'} text-left`}>{transactionType === 'payment' ? 'معادل دریافتی' : 'معادل پرداختی'}: {convertedPayment < 1 ? convertedPayment.toFixed(4) : convertedPayment.toLocaleString(undefined, { maximumFractionDigits: 2 })} {baseCurrencyName}</p>
+                            <p className={`text-[10px] font-black ${transactionType === 'payment' ? 'text-emerald-600' : 'text-red-600'} text-left`}>{transactionType === 'payment' ? 'معادل دریافتی / رسید' : 'معادل پرداختی / برد'}: {convertedPayment < 1 ? convertedPayment.toFixed(4) : convertedPayment.toLocaleString(undefined, { maximumFractionDigits: 2 })} {baseCurrencyName}</p>
                         )}
                         <input name="description" placeholder="بابت... (اختیاری)" className="w-full p-4 border border-slate-200 rounded-xl" />
                         
@@ -1265,7 +1265,7 @@ const ExpensesTab = () => {
         <div>
             <div className="flex flex-wrap gap-3 mb-8">
                 <button onClick={openModal} className="flex items-center bg-blue-600 text-white px-5 py-3 rounded-xl shadow-lg btn-primary">
-                    <PlusIcon className="w-5 h-5 ml-2" /> <span className="font-bold">ثبت هزینه جدید</span>
+                    <PlusIcon className="w-5 h-5 ml-2" /> <span className="font-bold">ثبت هزینه جدید / برد</span>
                 </button>
                 
                 <div className="relative">
@@ -1379,7 +1379,7 @@ const ExpensesTab = () => {
             </div>
 
             {isModalOpen && (
-                <Modal title={editingExpense ? "ویرایش هزینه" : "ثبت هزینه جدید"} onClose={closeModal}>
+                <Modal title={editingExpense ? "ویرایش هزینه" : "ثبت هزینه جدید / برد"} onClose={closeModal}>
                     <form onSubmit={handleAddExpenseForm} className="space-y-4">
                         <JalaliDateInput value={expenseDate} onChange={setExpenseDate} label="تاریخ هزینه" />
                         <input type="hidden" name="date" value={expenseDate} />
@@ -1416,7 +1416,7 @@ const ExpensesTab = () => {
                             ))}
                         </select>
                         <button type="submit" className="w-full bg-blue-600 text-white p-4 rounded-xl shadow-xl shadow-blue-100 font-black text-lg active:scale-[0.98] transition-all">
-                            {editingExpense ? "بروزرسانی هزینه" : "ثبت هزینه"}
+                            {editingExpense ? "بروزرسانی هزینه" : "ثبت هزینه / برد"}
                         </button>
                     </form>
                 </Modal>
@@ -1485,6 +1485,158 @@ const CategoryManagerModal: React.FC<{ categories: string[], onClose: () => void
 };
 
 
+const CompaniesTab: React.FC = () => {
+    const { companies, addCompany, deleteCompany, updateCompany, products, purchaseInvoices } = useAppContext();
+    const [newCompanyName, setNewCompanyName] = useState('');
+    const [isAdding, setIsAdding] = useState(false);
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const [editName, setEditName] = useState('');
+
+    const handleAdd = async () => {
+        if (!newCompanyName.trim()) return;
+        const result = await addCompany(newCompanyName);
+        if (result.success) {
+            setNewCompanyName('');
+            setIsAdding(false);
+        } else {
+            alert(result.message);
+        }
+    };
+
+    const handleUpdate = async (id: string) => {
+        if (!editName.trim()) {
+            setEditingId(null);
+            return;
+        }
+        const result = await updateCompany(id, editName.trim());
+        if (result.success) {
+            setEditingId(null);
+        } else {
+            alert(result.message);
+        }
+    };
+
+    const isCompanyInUse = (companyId: string) => {
+        const inProducts = products.some(p => p.companyId === companyId);
+        const inPurchases = purchaseInvoices.some(inv => inv.companyId === companyId);
+        return inProducts || inPurchases;
+    };
+
+    return (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 className="text-2xl font-black text-slate-800">مدیریت کمپانی‌ها</h2>
+                    <p className="text-slate-500 mt-1">تعریف و مدیریت شرکت‌های تأمین‌کننده کالا</p>
+                </div>
+                <button 
+                    onClick={() => setIsAdding(true)}
+                    className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3.5 rounded-2xl font-black shadow-xl shadow-blue-100 hover:scale-[1.02] transition-all active:scale-95"
+                >
+                    <PlusIcon className="w-5 h-5" />
+                    <span>افزودن کمپانی جدید</span>
+                </button>
+            </div>
+
+            {isAdding && (
+                <div className="bg-slate-50 p-6 rounded-3xl border-2 border-dashed border-slate-200 flex flex-col md:flex-row gap-4 animate-in zoom-in-95 duration-300">
+                    <input 
+                        type="text"
+                        value={newCompanyName}
+                        onChange={(e) => setNewCompanyName(e.target.value)}
+                        placeholder="نام کمپانی را وارد کنید..."
+                        className="flex-grow p-4 rounded-2xl border-2 border-slate-200 focus:border-blue-500 outline-none font-bold text-lg"
+                        autoFocus
+                        onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
+                    />
+                    <div className="flex gap-2">
+                        <button 
+                            onClick={handleAdd}
+                            className="bg-emerald-500 text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-emerald-100 hover:bg-emerald-600 transition-all"
+                        >
+                            ثبت
+                        </button>
+                        <button 
+                            onClick={() => setIsAdding(false)}
+                            className="bg-slate-200 text-slate-600 px-8 py-4 rounded-2xl font-black hover:bg-slate-300 transition-all"
+                        >
+                            انصراف
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {companies.length === 0 ? (
+                    <div className="col-span-full py-20 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                        <BuildingIcon className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                        <p className="text-slate-400 font-bold text-lg">هنوز هیچ کمپانی ثبت نشده است.</p>
+                    </div>
+                ) : (
+                    companies.map(company => (
+                        <div key={company.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group flex items-center justify-between">
+                            <div className="flex items-center gap-4 flex-grow">
+                                <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                                    <BuildingIcon className="w-6 h-6" />
+                                </div>
+                                {editingId === company.id ? (
+                                    <input 
+                                        type="text"
+                                        value={editName}
+                                        onChange={(e) => setEditName(e.target.value)}
+                                        className="flex-grow p-2 rounded-xl border-2 border-blue-500 outline-none font-bold"
+                                        autoFocus
+                                        onBlur={() => handleUpdate(company.id)}
+                                        onKeyDown={(e) => {
+                                            if(e.key === 'Enter') handleUpdate(company.id);
+                                            if(e.key === 'Escape') setEditingId(null);
+                                        }}
+                                    />
+                                ) : (
+                                    <span className="font-black text-lg text-slate-700">{company.name}</span>
+                                )}
+                            </div>
+                            <div className="flex gap-1">
+                                <button 
+                                    onClick={() => {
+                                        setEditingId(company.id);
+                                        setEditName(company.name);
+                                    }}
+                                    className="p-2 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                                    title="ویرایش نام"
+                                >
+                                    <EditIcon className="w-5 h-5" />
+                                </button>
+                                <button 
+                                    onClick={() => {
+                                        if (isCompanyInUse(company.id)) {
+                                            alert("این کمپانی در محصولات یا فاکتورها استفاده شده است و قابل حذف نیست.");
+                                            return;
+                                        }
+                                        if(confirm(`آیا از حذف کمپانی "${company.name}" اطمینان دارید؟`)) {
+                                            deleteCompany(company.id);
+                                        }
+                                    }}
+                                    disabled={isCompanyInUse(company.id)}
+                                    className={`p-2 rounded-xl transition-all opacity-0 group-hover:opacity-100 ${
+                                        isCompanyInUse(company.id) 
+                                            ? 'text-slate-200 cursor-not-allowed' 
+                                            : 'text-slate-300 hover:text-rose-500 hover:bg-rose-50'
+                                    }`}
+                                    title={isCompanyInUse(company.id) ? "این کمپانی در حال استفاده است" : "حذف کمپانی"}
+                                >
+                                    <TrashIcon className="w-5 h-5" />
+                                </button>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+        </div>
+    );
+};
+
+
 const Accounting: React.FC = () => {
     const { hasPermission } = useAppContext();
     const [activeTab, setActiveTab] = useState('suppliers');
@@ -1494,6 +1646,7 @@ const Accounting: React.FC = () => {
         { id: 'payroll', label: 'حقوق و دستمزد', icon: <UserGroupIcon className="w-5 h-5"/>, permission: 'accounting:manage_payroll' },
         { id: 'customers', label: 'مشتریان', icon: <UserGroupIcon className="w-5 h-5"/>, permission: 'accounting:manage_customers' },
         { id: 'expenses', label: 'مصارف', icon: <TrashIcon className="w-5 h-5"/>, permission: 'accounting:manage_expenses' },
+        { id: 'companies', label: 'کمپانی‌ها', icon: <BuildingIcon className="w-5 h-5"/>, permission: 'accounting:manage_suppliers' },
     ];
     
     const accessibleTabs = tabs.filter(tab => hasPermission(tab.permission));
@@ -1512,6 +1665,7 @@ const Accounting: React.FC = () => {
             case 'payroll': return <PayrollTab />;
             case 'customers': return <CustomersTab />;
             case 'expenses': return <ExpensesTab />;
+            case 'companies': return <CompaniesTab />;
             default: return null;
         }
     };

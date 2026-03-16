@@ -45,7 +45,8 @@ const ProductSide: React.FC<{
     exchangeRate: string,
     onMobileCheckout: () => void,
     saleInvoices: SaleInvoice[],
-    selectedCustomerId: string
+    selectedCustomerId: string,
+    editingSaleInvoiceId: string | null
 }> = ({
     searchContainerRef, memoFileInputRef, searchInputRef, searchTerm, setSearchTerm,
     setIsSearchFocused, handleTakePhotoClick, handlePhotoTaken, isBarcodeModeActive,
@@ -53,7 +54,7 @@ const ProductSide: React.FC<{
     isSearchFocused, dropdownProducts, handleDropdownItemClick,
     addToCart, storeSettings, cart, editingPriceItemId, setEditingPriceItemId,
     updateCartItemQuantity, removeFromCart, updateCartItemFinalPrice, hasPermission,
-    currency, exchangeRate, onMobileCheckout, saleInvoices, selectedCustomerId
+    currency, exchangeRate, onMobileCheckout, saleInvoices, selectedCustomerId, editingSaleInvoiceId
 }) => {
     
     const baseCurrency = storeSettings.baseCurrency || 'AFN';
@@ -163,6 +164,7 @@ const ProductSide: React.FC<{
                            exchangeRate={exchangeRate}
                            saleInvoices={saleInvoices}
                            selectedCustomerId={selectedCustomerId}
+                           editingInvoiceId={editingSaleInvoiceId}
                        />
                     ))}
                  </div>
@@ -332,6 +334,7 @@ const CartSide: React.FC<any> = ({
                            exchangeRate={exchangeRate}
                            saleInvoices={saleInvoices}
                            selectedCustomerId={selectedCustomerId}
+                           editingInvoiceId={editingSaleInvoiceId}
                        />
                     ))
                 )}
@@ -904,7 +907,8 @@ const POS: React.FC = () => {
                         updateCartItemFinalPrice: contextUpdateCartItemFinalPrice, hasPermission: context.hasPermission,
                         currency, exchangeRate,
                         onMobileCheckout: () => setMobileView('cart'),
-                        saleInvoices, selectedCustomerId
+                        saleInvoices, selectedCustomerId,
+                        editingSaleInvoiceId: context.editingSaleInvoiceId
                       }}
                     />
                 </div>

@@ -20,8 +20,8 @@ const ReceiptPreviewModal: React.FC<ReceiptPreviewModalProps> = ({ person, trans
         window.print();
     };
     
-    const title = type === 'supplier' ? 'رسید پرداخت وجه' : 'رسید دریافت وجه';
-    const partyLabel = type === 'supplier' ? 'پرداخت شده به' : 'دریافت شده از';
+    const title = type === 'supplier' ? 'رسید پرداخت وجه / برد' : 'رسید دریافت وجه / رسید';
+    const partyLabel = type === 'supplier' ? 'پرداخت شده به / برد' : 'دریافت شده از / رسید';
     const personName = person ? person.name : 'حساب حذف شده';
 
     // Identify the specific currency of the transaction

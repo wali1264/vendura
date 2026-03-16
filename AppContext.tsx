@@ -2,7 +2,7 @@
 import React, { createContext, useContext, ReactNode, useState, useEffect, useCallback, useRef } from 'react';
 import type {
     Product, ProductBatch, SaleInvoice, PurchaseInvoice, InTransitInvoice, PurchaseInvoiceItem, InvoiceItem,
-    Customer, Supplier, Employee, Expense, Service, StoreSettings, CartItem,
+    Customer, Supplier, Employee, Expense, Service, StoreSettings, CartItem, Company,
     CustomerTransaction, SupplierTransaction, PayrollTransaction, ActivityLog,
     User, Role, Permission, AppState, DepositHolder, DepositTransaction,
     Order, OrderStatus, OrderPayment
@@ -84,6 +84,11 @@ interface AppContextType extends AppState {
     addService: (service: Omit<Service, 'id'>) => void;
     deleteService: (serviceId: string) => void;
     
+    // Companies
+    addCompany: (name: string) => { success: boolean; message: string };
+    updateCompany: (id: string, name: string) => Promise<{ success: boolean; message: string }>;
+    deleteCompany: (id: string) => void;
+    
     // Accounting
     addSupplier: (supplier: Omit<Supplier, 'id' | 'balance' | 'balanceAFN' | 'balanceUSD' | 'balanceIRT'>, initialBalance?: { amount: number, type: 'creditor' | 'debtor', currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => void;
     updateSupplier: (supplier: Supplier, initialBalance?: { amount: number, type: 'creditor' | 'debtor', currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => Promise<void>;
@@ -146,7 +151,7 @@ const getDefaultState = (): AppState => {
             expenseCategories: ['rent', 'utilities', 'supplies', 'salary', 'other']
         },
         cart: [], customerTransactions: [], supplierTransactions: [], payrollTransactions: [],
-        activities: [], wastageRecords: [], orders: [], saleInvoiceCounter: 0, editingSaleInvoiceId: null, editingPurchaseInvoiceId: null,
+        activities: [], wastageRecords: [], orders: [], companies: [], saleInvoiceCounter: 0, editingSaleInvoiceId: null, editingPurchaseInvoiceId: null,
         isAuthenticated: false, currentUser: null,
         users: [],
         roles: [],
@@ -183,7 +188,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const fetchData = useCallback(async (isSilent = false) => {
         if (!isSilent) setIsLoading(true);
         try {
-            const [settings, users, roles, products, services, entities, transactions, invoices, activity, wastageRecords, orders] = await Promise.all([
+            const [settings, users, roles, products, services, entities, transactions, invoices, activity, wastageRecords, orders, companies] = await Promise.all([
                 api.getSettings().catch(() => ({})),
                 api.getUsers().catch(() => []),
                 api.getRoles().catch(() => []),
@@ -194,7 +199,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 api.getInvoices().catch(() => ({ saleInvoices: [], purchaseInvoices: [], inTransitInvoices: [] })),
                 api.getActivities().catch(() => []),
                 api.getWastageRecords().catch(() => []),
-                api.getOrders().catch(() => [])
+                api.getOrders().catch(() => []),
+                api.getCompanies().catch(() => [])
             ]);
 
             const isSessionLocked = localStorage.getItem('kasebyar_session_locked') === 'true';
@@ -330,6 +336,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     activities: activity,
                     wastageRecords: wastageRecords,
                     orders: orders,
+                    companies: companies,
                     isAuthenticated: isAuth,
                     currentUser: restoredUser
                 };
@@ -1532,6 +1539,35 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
     };
 
+    const addCompany = async (name: string) => {
+        if (!name.trim()) return { success: false, message: "نام کمپانی نمی‌تواند خالی باشد." };
+        if (state.companies.some(c => c.name === name.trim())) return { success: false, message: "این کمپانی قبلاً ثبت شده است." };
+        
+        const newCompany: Company = {
+            id: Date.now().toString(),
+            name: name.trim()
+        };
+        await api.addCompany(newCompany);
+        setState(prev => ({ ...prev, companies: [...prev.companies, newCompany] }));
+        return { success: true, message: "کمپانی با موفقیت اضافه شد." };
+    };
+
+    const deleteCompany = async (id: string) => {
+        await api.deleteCompany(id);
+        setState(prev => ({ ...prev, companies: prev.companies.filter(c => c.id !== id) }));
+    };
+
+    const updateCompany = async (id: string, name: string) => {
+        if (!name.trim()) return { success: false, message: "نام کمپانی نمی‌تواند خالی باشد." };
+        const updatedCompany = { id, name: name.trim() };
+        await api.updateCompany(updatedCompany);
+        setState(prev => ({
+            ...prev,
+            companies: prev.companies.map(c => c.id === id ? updatedCompany : c)
+        }));
+        return { success: true, message: "کمپانی با موفقیت ویرایش شد." };
+    };
+
     const addSupplier = (s: any, initial?: any) => {
         api.addSupplier(s).then(ns => {
             if (initial && initial.amount > 0) {
@@ -2083,7 +2119,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addProduct, updateProduct, deleteProduct, registerWastage, addOrder, updateOrderStatus, updateOrder, deleteOrder, addOrderPayment, addToCart, updateCartItemQuantity, updateCartItemFinalPrice, removeFromCart, completeSale,
         beginEditSale, cancelEditSale, addSaleReturn, addPurchaseInvoice, beginEditPurchase, cancelEditPurchase, updatePurchaseInvoice, addPurchaseReturn,
         addInTransitInvoice, updateInTransitInvoice, deleteInTransitInvoice, archiveInTransitInvoice, moveInTransitItems, addInTransitPayment,
-        updateSettings, addService, deleteService, addSupplier, updateSupplier, deleteSupplier, addSupplierPayment, updateSupplierTransaction, deleteSupplierTransaction, addCustomer, updateCustomer, deleteCustomer, addCustomerPayment, updateCustomerTransaction, deleteCustomerTransaction,
+        updateSettings, addService, deleteService, addCompany, updateCompany, deleteCompany, addSupplier, updateSupplier, deleteSupplier, addSupplierPayment, updateSupplierTransaction, deleteSupplierTransaction, addCustomer, updateCustomer, deleteCustomer, addCustomerPayment, updateCustomerTransaction, deleteCustomerTransaction,
         addEmployee, updateEmployee, deleteEmployee, toggleEmployeeActive, addEmployeeAdvance, addEmployeeAdvanceToEmployee, processAndPaySalaries, addExpense, updateExpense, deleteExpense, setInvoiceTransientCustomer,
         addDepositHolder, deleteDepositHolder, processDepositTransaction
     }}>{children}</AppContext.Provider>;

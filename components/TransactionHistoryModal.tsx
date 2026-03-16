@@ -130,8 +130,8 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
                 <tr>
                     <th className="p-3 font-bold text-slate-700 border-b">تاریخ</th>
                     <th className="p-3 font-bold text-slate-700 border-b">شرح</th>
-                    <th className="p-3 font-bold text-slate-700 border-b">بدهکار</th>
-                    <th className="p-3 font-bold text-slate-700 border-b">بستانکار</th>
+                    <th className="p-3 font-bold text-slate-700 border-b">بدهکار / برد</th>
+                    <th className="p-3 font-bold text-slate-700 border-b">بستانکار / رسید</th>
                     <th className="p-3 font-bold text-slate-700 border-b"></th>
                 </tr>
             </thead>
@@ -166,8 +166,8 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
                                     )}
                                 </div>
                             </td>
-                            <td data-label="بدهکار" className="p-3 text-blue-600 font-bold text-xl" dir="ltr">{debit > 0 ? `${debit.toLocaleString('en-US')} ${storeSettings.currencyConfigs[currency as 'AFN'|'USD'|'IRT']?.name || currency}` : '-'}</td>
-                            <td data-label="بستانکار" className="p-3 text-red-600 font-bold text-xl" dir="ltr">{credit > 0 ? `${credit.toLocaleString('en-US')} ${storeSettings.currencyConfigs[currency as 'AFN'|'USD'|'IRT']?.name || currency}` : '-'}</td>
+                            <td data-label="بدهکار / برد" className="p-3 text-blue-600 font-bold text-xl" dir="ltr">{debit > 0 ? `${debit.toLocaleString('en-US')} ${storeSettings.currencyConfigs[currency as 'AFN'|'USD'|'IRT']?.name || currency}` : '-'}</td>
+                            <td data-label="بستانکار / رسید" className="p-3 text-red-600 font-bold text-xl" dir="ltr">{credit > 0 ? `${credit.toLocaleString('en-US')} ${storeSettings.currencyConfigs[currency as 'AFN'|'USD'|'IRT']?.name || currency}` : '-'}</td>
                             <td className="p-3 actions-cell">
                                 <div className="flex items-center gap-1 justify-center">
                                     {(t.type === 'payment' || t.type === 'receipt') && (
