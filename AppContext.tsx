@@ -196,19 +196,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const fetchData = useCallback(async (isSilent = false) => {
         if (!isSilent) setIsLoading(true);
         try {
-            const [settings, users, roles, products, services, entities, transactions, invoices, activity, wastageRecords, orders, companies] = await Promise.all([
+            const [settings, users, roles, products, services, entities, transactions, invoices, activity, wastageRecords, orders] = await Promise.all([
                 api.getSettings().catch(() => ({})),
                 api.getUsers().catch(() => []),
                 api.getRoles().catch(() => []),
                 api.getProducts().catch(() => []),
                 api.getServices().catch(() => []),
-                api.getEntities().catch(() => ({ customers: [], suppliers: [], employees: [], expenses: [], depositHolders: [] })),
+                api.getEntities().catch(() => ({ customers: [], suppliers: [], employees: [], expenses: [], depositHolders: [], companies: [], partners: [] })),
                 api.getTransactions().catch(() => ({ customerTransactions: [], supplierTransactions: [], payrollTransactions: [], depositTransactions: [] })),
                 api.getInvoices().catch(() => ({ saleInvoices: [], purchaseInvoices: [], inTransitInvoices: [] })),
                 api.getActivities().catch(() => []),
                 api.getWastageRecords().catch(() => []),
-                api.getOrders().catch(() => []),
-                api.getCompanies().catch(() => [])
+                api.getOrders().catch(() => [])
             ]);
 
             const isSessionLocked = localStorage.getItem('kasebyar_session_locked') === 'true';
@@ -344,7 +343,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     activities: activity,
                     wastageRecords: wastageRecords,
                     orders: orders,
-                    companies: companies,
+                    companies: entities.companies || [],
+                    partners: entities.partners || [],
                     isAuthenticated: isAuth,
                     currentUser: restoredUser
                 };
