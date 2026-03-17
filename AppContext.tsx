@@ -2,7 +2,7 @@
 import React, { createContext, useContext, ReactNode, useState, useEffect, useCallback, useRef } from 'react';
 import type {
     Product, ProductBatch, SaleInvoice, PurchaseInvoice, InTransitInvoice, PurchaseInvoiceItem, InvoiceItem,
-    Customer, Supplier, Employee, Expense, Service, StoreSettings, CartItem, Company,
+    Customer, Supplier, Employee, Expense, Service, StoreSettings, CartItem, Company, Partner,
     CustomerTransaction, SupplierTransaction, PayrollTransaction, ActivityLog,
     User, Role, Permission, AppState, DepositHolder, DepositTransaction,
     Order, OrderStatus, OrderPayment
@@ -59,6 +59,7 @@ interface AppContextType extends AppState {
     completeSale: (cashier: string, customerId?: string, currency?: 'AFN'|'USD'|'IRT', exchangeRate?: number, supplierIntermediaryId?: string) => Promise<{ success: boolean; invoice?: SaleInvoice; message: string }>;
     beginEditSale: (invoiceId: string) => { success: boolean; message: string; customerId?: string; supplierIntermediaryId?: string; };
     cancelEditSale: () => void;
+    deleteSaleInvoice: (invoiceId: string) => Promise<{ success: boolean; message: string }>;
     addSaleReturn: (originalInvoiceId: string, returnItems: { id: string; type: 'product' | 'service'; quantity: number }[], cashier: string) => Promise<{ success: boolean, message: string }>;
     setInvoiceTransientCustomer: (invoiceId: string, customerName: string) => Promise<void>;
     
@@ -119,6 +120,12 @@ interface AppContextType extends AppState {
     addDepositHolder: (holder: Omit<DepositHolder, 'id' | 'balance' | 'balanceAFN' | 'balanceUSD' | 'balanceIRT' | 'createdAt'>) => Promise<void>;
     deleteDepositHolder: (id: string) => Promise<void>;
     processDepositTransaction: (holderId: string, type: 'deposit' | 'withdrawal', amount: number, currency: 'AFN' | 'USD' | 'IRT', description: string, exchangeRate?: number, isCash?: boolean) => Promise<{ success: boolean; message: string }>;
+
+    // Partners
+    addPartner: (name: string, shares: { companyId: string; percentage: number }[]) => Promise<{ success: boolean; message: string }>;
+    updatePartner: (id: string, name: string, shares: { companyId: string; percentage: number }[]) => Promise<{ success: boolean; message: string }>;
+    deletePartner: (id: string) => Promise<{ success: boolean; message: string }>;
+    recordPartnerWithdrawal: (partnerId: string, companyId: string, amount: number, currency: 'AFN' | 'USD' | 'IRT', rate: number, description: string) => Promise<{ success: boolean; message: string }>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -138,6 +145,7 @@ const getDefaultState = (): AppState => {
     return {
         products: [], saleInvoices: [], purchaseInvoices: [], inTransitInvoices: [], customers: [],
         suppliers: [], employees: [], expenses: [], services: [], depositHolders: [], depositTransactions: [],
+        companies: [], partners: [],
         storeSettings: {
         storeName: 'Vendura', address: '', phone: '', lowStockThreshold: 10,
             expiryThresholdMonths: 3, currencyName: 'افغانی', currencySymbol: 'AFN',
@@ -151,7 +159,7 @@ const getDefaultState = (): AppState => {
             expenseCategories: ['rent', 'utilities', 'supplies', 'salary', 'other']
         },
         cart: [], customerTransactions: [], supplierTransactions: [], payrollTransactions: [],
-        activities: [], wastageRecords: [], orders: [], companies: [], saleInvoiceCounter: 0, editingSaleInvoiceId: null, editingPurchaseInvoiceId: null,
+        activities: [], wastageRecords: [], orders: [], saleInvoiceCounter: 0, editingSaleInvoiceId: null, editingPurchaseInvoiceId: null,
         isAuthenticated: false, currentUser: null,
         users: [],
         roles: [],
@@ -1180,6 +1188,72 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     const cancelEditSale = () => setState(prev => ({ ...prev, editingSaleInvoiceId: null, cart: [] }));
+
+    const deleteSaleInvoice = async (invoiceId: string): Promise<{ success: boolean; message: string }> => {
+        const invoice = state.saleInvoices.find(inv => inv.id === invoiceId);
+        if (!invoice) return { success: false, message: "فاکتور یافت نشد." };
+
+        try {
+            // 1. Calculate stock restores
+            const stockRestores: { batchId: string; quantity: number }[] = [];
+            invoice.items.forEach(item => {
+                if (item.type === 'product' && item.batchDeductions) {
+                    item.batchDeductions.forEach(deduction => {
+                        stockRestores.push({ batchId: deduction.batchId, quantity: deduction.quantity });
+                    });
+                }
+            });
+
+            // 2. Calculate customer balance update (if credit sale)
+            let customerUpdate;
+            if (invoice.customerId) {
+                const customer = state.customers.find(c => c.id === invoice.customerId);
+                if (customer) {
+                    const rate = invoice.exchangeRate || 1;
+                    const config = state.storeSettings.currencyConfigs[invoice.currency];
+                    const baseAmount = invoice.currency === state.storeSettings.baseCurrency ? invoice.totalAmount : (config.method === 'multiply' ? invoice.totalAmount / rate : invoice.totalAmount * rate);
+
+                    const newAFN = customer.balanceAFN - (invoice.currency === 'AFN' ? invoice.totalAmount : 0);
+                    const newUSD = customer.balanceUSD - (invoice.currency === 'USD' ? invoice.totalAmount : 0);
+                    const newIRT = customer.balanceIRT - (invoice.currency === 'IRT' ? invoice.totalAmount : 0);
+                    const newTotal = customer.balance - baseAmount;
+
+                    customerUpdate = {
+                        id: invoice.customerId,
+                        newBalances: { AFN: newAFN, USD: newUSD, IRT: newIRT, Total: newTotal }
+                    };
+                }
+            }
+
+            // 3. Calculate supplier intermediary balance update (if any)
+            let supplierUpdate;
+            if (invoice.supplierIntermediaryId) {
+                const supplier = state.suppliers.find(s => s.id === invoice.supplierIntermediaryId);
+                if (supplier) {
+                    const rate = invoice.exchangeRate || 1;
+                    const config = state.storeSettings.currencyConfigs[invoice.currency];
+                    const baseAmount = invoice.currency === state.storeSettings.baseCurrency ? invoice.totalAmount : (config.method === 'multiply' ? invoice.totalAmount / rate : invoice.totalAmount * rate);
+
+                    const newAFN = supplier.balanceAFN - (invoice.currency === 'AFN' ? invoice.totalAmount : 0);
+                    const newUSD = supplier.balanceUSD - (invoice.currency === 'USD' ? invoice.totalAmount : 0);
+                    const newIRT = supplier.balanceIRT - (invoice.currency === 'IRT' ? invoice.totalAmount : 0);
+                    const newTotal = supplier.balance - baseAmount;
+
+                    supplierUpdate = {
+                        id: invoice.supplierIntermediaryId,
+                        newBalances: { AFN: newAFN, USD: newUSD, IRT: newIRT, Total: newTotal }
+                    };
+                }
+            }
+
+            await api.deleteSale(invoiceId, stockRestores, customerUpdate, supplierUpdate);
+            await fetchData(true);
+            return { success: true, message: "فاکتور با موفقیت حذف شد و موجودی انبار و حساب‌ها بروزرسانی شدند." };
+        } catch (error) {
+            console.error("Error deleting sale invoice:", error);
+            return { success: false, message: "خطا در حذف فاکتور." };
+        }
+    };
     
     // --- Purchase Logic: Standardized Logic with Restoration Pattern ---
     const addPurchaseInvoice = async (data: any) => {
@@ -2038,13 +2112,71 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 return { success: true, message: 'حقوق ماهانه به حساب تمام کارکنان فعال اضافه شد.' };
             };
 
+    const addPartner = async (name: string, shares: { companyId: string; percentage: number }[]) => {
+        const newPartner: Partner = {
+            id: crypto.randomUUID(),
+            name,
+            shares
+        };
+        await api.addPartner(newPartner);
+        setState(prev => ({ ...prev, partners: [...prev.partners, newPartner] }));
+        return { success: true, message: "شریک با موفقیت اضافه شد." };
+    };
+
+    const updatePartner = async (id: string, name: string, shares: { companyId: string; percentage: number }[]) => {
+        const updatedPartner: Partner = { id, name, shares };
+        await api.updatePartner(updatedPartner);
+        setState(prev => ({
+            ...prev,
+            partners: prev.partners.map(p => p.id === id ? updatedPartner : p)
+        }));
+        return { success: true, message: "اطلاعات شریک با موفقیت بروزرسانی شد." };
+    };
+
+    const deletePartner = async (id: string) => {
+        await api.deletePartner(id);
+        setState(prev => ({ ...prev, partners: prev.partners.filter(p => p.id !== id) }));
+        return { success: true, message: "شریک با موفقیت حذف شد." };
+    };
+
+    const recordPartnerWithdrawal = async (partnerId: string, companyId: string, amount: number, currency: 'AFN' | 'USD' | 'IRT', rate: number, description: string) => {
+        const partner = state.partners.find(p => p.id === partnerId);
+        if (!partner) return { success: false, message: "شریک یافت نشد." };
+
+        const config = state.storeSettings.currencyConfigs[currency];
+        const baseAmount = currency === state.storeSettings.baseCurrency ? amount : (config.method === 'multiply' ? amount / rate : amount * rate);
+
+        const expense: Expense = {
+            id: crypto.randomUUID(),
+            category: 'partner_withdrawal',
+            amount,
+            currency,
+            exchangeRate: rate,
+            amountBase: baseAmount,
+            description: `برداشت شریک (${partner.name}): ${description}`,
+            date: new Date().toISOString(),
+            companyId,
+            partnerId
+        };
+
+        await api.addExpense(expense);
+        await fetchData(true);
+        return { success: true, message: "برداشت شریک با موفقیت ثبت شد." };
+    };
+
     const addExpense = (e: any) => { 
         const rate = e.exchangeRate || 1;
         const cur = e.currency || state.storeSettings.baseCurrency;
         const config = state.storeSettings.currencyConfigs[cur as 'AFN'|'IRT'|'USD'];
         const baseAmount = cur === state.storeSettings.baseCurrency ? e.amount : (config.method === 'multiply' ? e.amount / rate : e.amount * rate);
         
-        const finalExpense = { ...e, amountBase: baseAmount, date: e.date || new Date().toISOString() };
+        const finalExpense = { 
+            ...e, 
+            amountBase: baseAmount, 
+            date: e.date || new Date().toISOString(),
+            companyId: e.companyId || null,
+            partnerId: e.partnerId || null
+        };
         api.addExpense(finalExpense).then(() => fetchData(true)); 
     };
 
@@ -2054,7 +2186,12 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const config = state.storeSettings.currencyConfigs[cur as 'AFN'|'IRT'|'USD'];
         const baseAmount = cur === state.storeSettings.baseCurrency ? e.amount : (config.method === 'multiply' ? e.amount / rate : e.amount * rate);
         
-        const finalExpense = { ...e, amountBase: baseAmount };
+        const finalExpense = { 
+            ...e, 
+            amountBase: baseAmount,
+            companyId: e.companyId || null,
+            partnerId: e.partnerId || null
+        };
         api.updateExpense(finalExpense).then(() => fetchData(true));
     };
 
@@ -2117,10 +2254,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         ...state, showToast, isLoading, isLoggingOut, isShopActive, login, signup, logout, hasPermission, addUser, updateUser, deleteUser, addRole, updateRole, deleteRole, exportData, importData,
         cloudBackup, cloudRestore, autoBackupEnabled, setAutoBackupEnabled,
         addProduct, updateProduct, deleteProduct, registerWastage, addOrder, updateOrderStatus, updateOrder, deleteOrder, addOrderPayment, addToCart, updateCartItemQuantity, updateCartItemFinalPrice, removeFromCart, completeSale,
-        beginEditSale, cancelEditSale, addSaleReturn, addPurchaseInvoice, beginEditPurchase, cancelEditPurchase, updatePurchaseInvoice, addPurchaseReturn,
+        beginEditSale, cancelEditSale, deleteSaleInvoice, addSaleReturn, addPurchaseInvoice, beginEditPurchase, cancelEditPurchase, updatePurchaseInvoice, addPurchaseReturn,
         addInTransitInvoice, updateInTransitInvoice, deleteInTransitInvoice, archiveInTransitInvoice, moveInTransitItems, addInTransitPayment,
         updateSettings, addService, deleteService, addCompany, updateCompany, deleteCompany, addSupplier, updateSupplier, deleteSupplier, addSupplierPayment, updateSupplierTransaction, deleteSupplierTransaction, addCustomer, updateCustomer, deleteCustomer, addCustomerPayment, updateCustomerTransaction, deleteCustomerTransaction,
         addEmployee, updateEmployee, deleteEmployee, toggleEmployeeActive, addEmployeeAdvance, addEmployeeAdvanceToEmployee, processAndPaySalaries, addExpense, updateExpense, deleteExpense, setInvoiceTransientCustomer,
+        addPartner, updatePartner, deletePartner, recordPartnerWithdrawal,
         addDepositHolder, deleteDepositHolder, processDepositTransaction
     }}>{children}</AppContext.Provider>;
 };

@@ -176,7 +176,7 @@ const Reports: React.FC = () => {
             return s + amountBase;
         }, 0);
 
-        const cashOutExpenses = expenses.reduce((s, e) => s + (e.amountBase || e.amount), 0);
+        const cashOutExpenses = expenses.filter(e => !e.isHistorical).reduce((s, e) => s + (e.amountBase || e.amount), 0);
 
         const cashOutDeposits = depositTransactions.filter(t => t.type === 'withdrawal' && t.isCash !== false).reduce((s, t) => {
             const rate = (t as any).exchangeRate || 1;

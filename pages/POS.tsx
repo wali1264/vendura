@@ -216,7 +216,8 @@ const CartSide: React.FC<any> = ({
     setSelectedCustomerId, customers, selectedSupplierId, setSelectedSupplierId, suppliers,
     isSupplierMenuOpen, setIsSupplierMenuOpen, totalAmount, completeSale, setInvoiceDateRange,
     handlePrintInvoice, handleEditInvoice, storeSettings, setMobileView, addToCart, handleOpenReturnModal,
-    isProcessing, currency, setCurrency, exchangeRate, setExchangeRate, saleInvoices
+    isProcessing, currency, setCurrency, exchangeRate, setExchangeRate, saleInvoices,
+    deleteSaleInvoice, setInvoiceToDelete
 }) => {
     
     const rateNum = Number(exchangeRate) || 1;
@@ -443,6 +444,15 @@ const CartSide: React.FC<any> = ({
                                     <button onClick={() => handlePrintInvoice(invoice.id)} className="p-1.5 rounded-full text-gray-500 hover:text-green-600 bg-gray-50 hover:bg-green-100"><PrintIcon className="w-5 h-5"/></button>
                                     {hasPermission('pos:edit_invoice') && invoice.type === 'sale' && <button onClick={() => handleEditInvoice(invoice.id)} className="p-1.5 rounded-full text-gray-500 hover:text-blue-600 bg-gray-50 hover:bg-blue-100"><EditIcon className="w-5 h-5"/></button>}
                                     {invoice.type === 'sale' && <button onClick={() => handleOpenReturnModal(invoice)} className="p-1.5 rounded-full text-gray-500 hover:text-orange-600 bg-gray-50 hover:bg-orange-100"><PlusIcon className="w-5 h-5 transform rotate-45" /></button>}
+                                    {hasPermission('pos:delete_invoice') && (
+                                        <button 
+                                            onClick={() => setInvoiceToDelete(invoice.id)} 
+                                            className="p-1.5 rounded-full text-gray-500 hover:text-red-600 bg-gray-50 hover:bg-red-100"
+                                            title="حذف کامل فاکتور"
+                                        >
+                                            <TrashIcon className="w-5 h-5"/>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         ))
@@ -544,6 +554,7 @@ const POS: React.FC = () => {
         removeFromCart: contextRemoveFromCart,
         updateCartItemFinalPrice: contextUpdateCartItemFinalPrice,
         addSaleReturn,
+        deleteSaleInvoice,
         storeSettings,
         currentUser,
         editingSaleInvoiceId
@@ -575,10 +586,18 @@ const POS: React.FC = () => {
     const shouldRestartRecognition = useRef(false);
     const [isMobileCustomerMenuOpen, setIsMobileCustomerMenuOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null);
+    const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
 
     // Multi-currency POS State
     const [currency, setCurrency] = useState<'AFN' | 'USD' | 'IRT'>(storeSettings.baseCurrency || 'AFN');
     const [exchangeRate, setExchangeRate] = useState<string>('');
+
+    useEffect(() => {
+        if (invoiceToDelete) {
+            setDeleteConfirmationText('');
+        }
+    }, [invoiceToDelete]);
 
     // Sync currency with base currency on load if not editing
     useEffect(() => {
@@ -891,6 +910,57 @@ const POS: React.FC = () => {
                 <ReturnModal invoice={returnModalInvoice} onClose={() => setReturnModalInvoice(null)} onSubmit={handleReturnSubmit} />
             )}
             
+            {invoiceToDelete && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+                        <div className="p-6 text-center">
+                            <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <TrashIcon className="w-8 h-8" />
+                            </div>
+                            <h3 className="text-xl font-black text-slate-800 mb-2">حذف کامل فاکتور</h3>
+                            <p className="text-slate-500 text-sm leading-relaxed mb-6">
+                                آیا از حذف کامل فاکتور <span className="font-mono font-bold text-slate-700">{invoiceToDelete.slice(0,8)}</span> اطمینان دارید؟
+                                <br />
+                                این عمل تمام تغییرات در انبار و حساب مشتری را بازمی‌گرداند و غیرقابل بازگشت است.
+                            </p>
+
+                            <div className="mb-6 text-right">
+                                <label className="block text-xs font-black text-slate-400 mb-2 px-1">
+                                    لطفاً برای تایید، عبارت <span className="text-red-600">(قبول دارم)</span> را در کادر زیر تایپ کنید:
+                                </label>
+                                <input 
+                                    type="text"
+                                    value={deleteConfirmationText}
+                                    onChange={(e) => setDeleteConfirmationText(e.target.value)}
+                                    placeholder="قبول دارم"
+                                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-center font-black focus:ring-4 focus:ring-red-50 focus:border-red-200 outline-none transition-all"
+                                />
+                            </div>
+
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={() => setInvoiceToDelete(null)}
+                                    className="flex-1 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl hover:bg-slate-200 transition-colors"
+                                >
+                                    انصراف
+                                </button>
+                                <button 
+                                    disabled={deleteConfirmationText !== 'قبول دارم'}
+                                    onClick={async () => {
+                                        const result = await deleteSaleInvoice(invoiceToDelete);
+                                        showToast(result.message);
+                                        setInvoiceToDelete(null);
+                                    }}
+                                    className="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 shadow-lg shadow-red-200 transition-all active:scale-95 disabled:bg-slate-300 disabled:shadow-none disabled:cursor-not-allowed"
+                                >
+                                    تایید حذف
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
             <div className="md:flex h-full bg-transparent">
                 {/* Product View */}
                 <div className={`w-full md:w-1/2 p-2 md:p-6 flex-col ${mobileView === 'products' ? 'flex' : 'hidden'} md:flex h-full`}>
@@ -927,7 +997,7 @@ const POS: React.FC = () => {
                           totalAmount: totalAmountBase, completeSale, setInvoiceDateRange,
                           handlePrintInvoice, handleEditInvoice, storeSettings, setMobileView, addToCart, handleOpenReturnModal,
                           isProcessing, currency, setCurrency, exchangeRate, setExchangeRate,
-                          saleInvoices
+                          saleInvoices, deleteSaleInvoice, setInvoiceToDelete
                         }}
                      />
                 </div>

@@ -304,6 +304,8 @@ const BackupRestoreTab: React.FC<TabProps> = ({ showToast }) => {
     } = useAppContext();
     
     const [isProcessing, setIsProcessing] = useState(false);
+    const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+    const [pendingFile, setPendingFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleImportClick = () => {
@@ -313,9 +315,27 @@ const BackupRestoreTab: React.FC<TabProps> = ({ showToast }) => {
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
-            importData(file);
+            setPendingFile(file);
+            setShowRestoreConfirm(true);
         }
         event.target.value = '';
+    };
+
+    const confirmRestore = async () => {
+        if (pendingFile) {
+            setIsProcessing(true);
+            // First, trigger a backup of current data as a safety measure
+            showToast("در حال تهیه نسخه پشتیبان خودکار قبل از بازیابی...");
+            exportData();
+            
+            // Short delay to ensure download starts before page potentially reloads/state resets
+            setTimeout(() => {
+                importData(pendingFile);
+                setIsProcessing(false);
+                setShowRestoreConfirm(false);
+                setPendingFile(null);
+            }, 1500);
+        }
     };
 
     const handleCloudBackup = async () => {
@@ -353,6 +373,40 @@ const BackupRestoreTab: React.FC<TabProps> = ({ showToast }) => {
                 </div>
             </div>
 
+            {showRestoreConfirm && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+                        <div className="p-8 text-center">
+                            <div className="w-20 h-20 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <WarningIcon className="w-10 h-10" />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-800 mb-4">هشدار جدی بازیابی</h3>
+                            <p className="text-slate-600 text-sm leading-relaxed mb-8 font-bold">
+                                توجه: عملیات بازیابی تمام اطلاعات فعلی شما را پاک کرده و فایل انتخابی را جایگزین می‌کند.
+                                <br /><br />
+                                برای امنیت بیشتر، سیستم ابتدا یک نسخه پشتیبان از اطلاعات فعلی شما دانلود می‌کند و سپس عملیات بازیابی را انجام می‌دهد.
+                            </p>
+                            <div className="flex flex-col gap-3">
+                                <button 
+                                    disabled={isProcessing}
+                                    onClick={confirmRestore}
+                                    className="w-full py-4 bg-blue-600 text-white font-black rounded-2xl hover:bg-blue-700 shadow-xl shadow-blue-100 transition-all active:scale-95 disabled:bg-slate-400"
+                                >
+                                    {isProcessing ? 'در حال پردازش...' : 'تایید و شروع عملیات'}
+                                </button>
+                                <button 
+                                    disabled={isProcessing}
+                                    onClick={() => { setShowRestoreConfirm(false); setPendingFile(null); }}
+                                    className="w-full py-4 bg-slate-100 text-slate-600 font-black rounded-2xl hover:bg-slate-200 transition-colors"
+                                >
+                                    انصراف
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Cloud Section */}
             <div className="bg-gradient-to-br from-indigo-50 to-white p-5 md:p-8 rounded-3xl shadow-sm border border-indigo-100">
                 <div className="flex justify-between items-start mb-4">
@@ -368,22 +422,26 @@ const BackupRestoreTab: React.FC<TabProps> = ({ showToast }) => {
                 
                 <div className="flex flex-col md:flex-row gap-3">
                     <button 
-                        onClick={handleCloudBackup} 
-                        disabled={isProcessing || !navigator.onLine}
-                        className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-indigo-600 text-white font-black shadow-lg shadow-indigo-100 active:scale-[0.98] disabled:bg-slate-400"
+                        disabled={true}
+                        className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-slate-300 text-white font-black cursor-not-allowed"
                     >
-                        {isProcessing ? 'درحال انجام...' : 'ذخیره فوری در ابر'}
+                        ذخیره فوری در ابر (غیرفعال)
                     </button>
                     <button 
-                        onClick={handleCloudRestore}
-                        disabled={isProcessing || !navigator.onLine}
-                        className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-white border-2 border-indigo-200 text-indigo-600 font-black hover:bg-indigo-50 active:scale-[0.98] disabled:opacity-50"
+                        disabled={true}
+                        className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-white border-2 border-slate-200 text-slate-400 font-black cursor-not-allowed"
                     >
-                        بازیابی آخرین نسخه ابری
+                        بازیابی آخرین نسخه ابری (غیرفعال)
                     </button>
                 </div>
 
-                <div className="mt-8 pt-6 border-t border-indigo-100 flex flex-col md:flex-row items-center justify-between gap-4">
+                <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                    <p className="text-[11px] font-black text-amber-700 text-center">
+                        ⚠️ این قابلیت به دلیل محدودیت فضای سرور موقتاً غیرفعال است و در آینده نزدیک فعال خواهد شد.
+                    </p>
+                </div>
+
+                <div className="mt-8 pt-6 border-t border-indigo-100 flex flex-col md:flex-row items-center justify-between gap-4 opacity-50 pointer-events-none">
                     <div className="flex items-center gap-4">
                          <div className={`w-14 h-8 rounded-full p-1 cursor-pointer transition-all duration-300 ${autoBackupEnabled ? 'bg-green-500' : 'bg-slate-300'}`} onClick={() => setAutoBackupEnabled(!autoBackupEnabled)}>
                             <div className={`bg-white w-6 h-6 rounded-full shadow-md transition-all duration-300 ${autoBackupEnabled ? 'mr-6' : 'mr-0'}`}></div>

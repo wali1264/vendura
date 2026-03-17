@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppContext } from '../AppContext';
-import type { Supplier, Employee, Customer, Expense, AnyTransaction, CustomerTransaction, SupplierTransaction, PayrollTransaction, DepositHolder } from '../types';
-import { PlusIcon, XIcon, EyeIcon, TrashIcon, UserGroupIcon, AccountingIcon, TruckIcon, ChevronDownIcon, CheckIcon, EditIcon, FilterIcon, SettingsIcon, ArchiveBoxXMarkIcon, CheckCircleIcon, BuildingIcon } from '../components/icons';
+import type { Supplier, Employee, Customer, Expense, AnyTransaction, CustomerTransaction, SupplierTransaction, PayrollTransaction, DepositHolder, Partner } from '../types';
+import { PlusIcon, XIcon, EyeIcon, TrashIcon, UserGroupIcon, AccountingIcon, TruckIcon, ChevronDownIcon, CheckIcon, EditIcon, FilterIcon, SettingsIcon, ArchiveBoxXMarkIcon, CheckCircleIcon, BuildingIcon, ZapIcon } from '../components/icons';
 import Toast from '../components/Toast';
 import { formatCurrency, toEnglishDigits, formatBalance } from '../utils/formatters';
 import TransactionHistoryModal from '../components/TransactionHistoryModal';
@@ -1172,7 +1172,7 @@ const CustomersTab = () => {
 };
 
 const ExpensesTab = () => {
-    const { expenses, addExpense, updateExpense, deleteExpense, storeSettings, updateSettings } = useAppContext();
+    const { expenses, addExpense, updateExpense, deleteExpense, storeSettings, updateSettings, companies, partners } = useAppContext();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
     const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -1181,6 +1181,9 @@ const ExpensesTab = () => {
     const [filterCategory, setFilterCategory] = useState<string>('all');
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
+    const [isHistorical, setIsHistorical] = useState(false);
+    const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
+    const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
 
     const baseCurrency = storeSettings.baseCurrency;
     const baseCurrencyName = storeSettings.currencyConfigs[baseCurrency].name;
@@ -1210,12 +1213,14 @@ const ExpensesTab = () => {
         }
 
         const expenseData = {
-            date: new Date(formData.get('date') as string).toISOString(),
+            date: new Date(expenseDate).toISOString(),
             description: formData.get('description') as string,
             amount: amount,
             currency: expenseCurrency,
             exchangeRate: expenseCurrency === baseCurrency ? 1 : Number(expenseRate),
             category: formData.get('category') as string,
+            isHistorical: isHistorical,
+            companyId: selectedCompanyId || undefined
         };
 
         if (editingExpense) {
@@ -1234,15 +1239,22 @@ const ExpensesTab = () => {
     const closeModal = () => {
         setIsModalOpen(false);
         setEditingExpense(null);
+        setExpenseAmount('');
         setExpenseRate('');
         setExpenseCurrency(storeSettings.baseCurrency);
+        setIsHistorical(false);
+        setSelectedCompanyId(null);
+        setShowCompanyDropdown(false);
     };
 
     const handleEditExpense = (expense: Expense) => {
         setEditingExpense(expense);
+        setExpenseAmount(expense.amount.toString());
         setExpenseCurrency(expense.currency);
         setExpenseRate(expense.exchangeRate.toString());
         setExpenseDate(new Date(expense.date).toISOString().split('T')[0]);
+        setIsHistorical(!!expense.isHistorical);
+        setSelectedCompanyId(expense.companyId || null);
         setIsModalOpen(true);
     };
 
@@ -1256,6 +1268,7 @@ const ExpensesTab = () => {
             utilities: 'قبوض',
             supplies: 'ملزومات',
             salary: 'حقوق و دستمزد',
+            partner_withdrawal: 'برداشت شریک',
             other: 'سایر'
         };
         return labels[cat] || cat;
@@ -1410,11 +1423,79 @@ const ExpensesTab = () => {
                             <p className="text-[10px] font-black text-red-600 text-left">معادل هزینه: {convertedExpense < 1 ? convertedExpense.toFixed(4) : convertedExpense.toLocaleString(undefined, { maximumFractionDigits: 2 })} {baseCurrencyName}</p>
                         )}
                         
-                        <select name="category" className="w-full p-4 border border-slate-200 rounded-xl bg-white font-bold outline-none focus:ring-4 focus:ring-blue-50" defaultValue={editingExpense?.category}>
-                            {categories.map(cat => (
-                                <option key={cat} value={cat}>{getCategoryLabel(cat)}</option>
-                            ))}
-                        </select>
+                        <div className="relative flex items-center gap-2">
+                            <select name="category" className="flex-grow p-4 border border-slate-200 rounded-xl bg-white font-bold outline-none focus:ring-4 focus:ring-blue-50" defaultValue={editingExpense?.category}>
+                                {categories.map(cat => (
+                                    <option key={cat} value={cat}>{getCategoryLabel(cat)}</option>
+                                ))}
+                            </select>
+                            <div className="relative">
+                                <button 
+                                    type="button"
+                                    onClick={() => setShowCompanyDropdown(!showCompanyDropdown)}
+                                    className={`p-4 rounded-xl border transition-all ${selectedCompanyId ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-100' : 'bg-white border-slate-200 text-slate-400 hover:border-blue-300'}`}
+                                    title="انتخاب کمپانی"
+                                >
+                                    <ZapIcon className="w-6 h-6" />
+                                </button>
+
+                                {showCompanyDropdown && (
+                                    <div className="absolute left-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-slate-100 z-[110] overflow-hidden animate-in zoom-in-95 duration-200 origin-top-left">
+                                        <div className="p-3 border-b border-slate-50 bg-slate-50 flex justify-between items-center">
+                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">انتخاب کمپانی</span>
+                                            {selectedCompanyId && (
+                                                <button 
+                                                    type="button"
+                                                    onClick={() => { setSelectedCompanyId(null); setShowCompanyDropdown(false); }}
+                                                    className="text-[10px] font-black text-red-500 hover:text-red-600"
+                                                >
+                                                    حذف انتخاب
+                                                </button>
+                                            )}
+                                        </div>
+                                        <div className="max-h-60 overflow-y-auto p-1">
+                                            {companies.length === 0 ? (
+                                                <div className="p-4 text-center text-slate-400 text-xs font-bold italic">کمپانی یافت نشد</div>
+                                            ) : (
+                                                companies.map(c => (
+                                                    <button
+                                                        key={c.id}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedCompanyId(c.id);
+                                                            setShowCompanyDropdown(false);
+                                                        }}
+                                                        className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${selectedCompanyId === c.id ? 'bg-blue-50 text-blue-700' : 'hover:bg-slate-50 text-slate-600'}`}
+                                                    >
+                                                        <BuildingIcon className={`w-4 h-4 ${selectedCompanyId === c.id ? 'text-blue-500' : 'text-slate-300'}`} />
+                                                        <span className="font-bold text-sm">{c.name}</span>
+                                                        {selectedCompanyId === c.id && <CheckIcon className="w-4 h-4 mr-auto" />}
+                                                    </button>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {selectedCompanyId && (
+                            <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-xl border border-blue-100 animate-in slide-in-from-top-2 duration-300">
+                                <BuildingIcon className="w-4 h-4 text-blue-500" />
+                                <span className="text-xs font-bold text-blue-700">مربوط به کمپانی: {companies.find(c => c.id === selectedCompanyId)?.name}</span>
+                            </div>
+                        )}
+
+                        <label className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl border border-slate-200 cursor-pointer hover:bg-slate-100 transition-colors">
+                            <input 
+                                type="checkbox" 
+                                checked={isHistorical} 
+                                onChange={(e) => setIsHistorical(e.target.checked)}
+                                className="w-5 h-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-sm font-bold text-slate-700">رکورد تاریخی (تأثیری بر موجودی فعلی صندوق ندارد)</span>
+                        </label>
+
                         <button type="submit" className="w-full bg-blue-600 text-white p-4 rounded-xl shadow-xl shadow-blue-100 font-black text-lg active:scale-[0.98] transition-all">
                             {editingExpense ? "بروزرسانی هزینه" : "ثبت هزینه / برد"}
                         </button>
@@ -1637,6 +1718,430 @@ const CompaniesTab: React.FC = () => {
 };
 
 
+const PartnersTab: React.FC = () => {
+    const { partners, addPartner, updatePartner, deletePartner, companies, recordPartnerWithdrawal, storeSettings, saleInvoices, products, expenses } = useAppContext();
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+    const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
+    const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
+    
+    const [name, setName] = useState('');
+    const [shares, setShares] = useState<{ companyId: string; percentage: number }[]>([]);
+    
+    const [withdrawAmount, setWithdrawAmount] = useState('');
+    const [withdrawCurrency, setWithdrawCurrency] = useState<'AFN' | 'USD' | 'IRT'>(storeSettings.baseCurrency);
+    const [withdrawRate, setWithdrawRate] = useState('1');
+    const [withdrawCompanyId, setWithdrawCompanyId] = useState('');
+    const [withdrawDescription, setWithdrawDescription] = useState('');
+
+    const calculatePartnerProfit = (partnerId: string, companyId: string) => {
+        const partner = partners.find(p => p.id === partnerId);
+        if (!partner) return 0;
+        
+        const share = partner.shares.find(s => s.companyId === companyId);
+        if (!share) return 0;
+
+        // 1. Company Revenue & COGS
+        let totalRevenue = 0;
+        let totalCOGS = 0;
+
+        saleInvoices.forEach(inv => {
+            inv.items.forEach(item => {
+                if (item.type === 'product') {
+                    const product = products.find(p => p.id === item.id);
+                    if (product?.companyId === companyId) {
+                        const itemRevenue = (item.finalPrice || item.salePrice) * item.quantity;
+                        const itemCOGS = (item.purchasePrice || 0) * item.quantity;
+                        
+                        const rate = inv.exchangeRate || 1;
+                        const config = storeSettings.currencyConfigs[inv.currency];
+                        const baseRevenue = inv.currency === storeSettings.baseCurrency ? itemRevenue : (config.method === 'multiply' ? itemRevenue / rate : itemRevenue * rate);
+                        const baseCOGS = inv.currency === storeSettings.baseCurrency ? itemCOGS : (config.method === 'multiply' ? itemCOGS / rate : itemCOGS * rate);
+                        
+                        totalRevenue += baseRevenue;
+                        totalCOGS += baseCOGS;
+                    }
+                }
+            });
+        });
+
+        // 2. Company Expenses
+        const companyExpenses = expenses.filter(e => e.companyId === companyId && e.category !== 'partner_withdrawal');
+        const totalExpenses = companyExpenses.reduce((sum, e) => sum + (e.amountBase || 0), 0);
+
+        // 3. Net Profit for Company
+        const netProfit = totalRevenue - totalCOGS - totalExpenses;
+
+        // 4. Partner's Share of Profit
+        const partnerProfit = (netProfit * share.percentage) / 100;
+
+        // 5. Deduct Withdrawals
+        const partnerWithdrawals = expenses.filter(e => e.category === 'partner_withdrawal' && e.partnerId === partnerId && e.companyId === companyId);
+        const totalWithdrawals = partnerWithdrawals.reduce((sum, e) => sum + (e.amountBase || 0), 0);
+
+        return partnerProfit - totalWithdrawals;
+    };
+
+    const isShareDeletable = (partnerId: string, companyId: string) => {
+        return !expenses.some(e => e.category === 'partner_withdrawal' && e.partnerId === partnerId && e.companyId === companyId);
+    };
+
+    const handleAddPartner = async () => {
+        if (!name.trim()) return;
+        const result = await addPartner(name, shares);
+        if (result.success) {
+            setIsAddModalOpen(false);
+            resetForm();
+        }
+    };
+
+    const handleUpdatePartner = async () => {
+        if (!editingPartner || !name.trim()) return;
+        const result = await updatePartner(editingPartner.id, name, shares);
+        if (result.success) {
+            setEditingPartner(null);
+            resetForm();
+        }
+    };
+
+    const handleWithdraw = async () => {
+        if (!selectedPartner || !withdrawAmount || !withdrawCompanyId) return;
+        
+        const profit = calculatePartnerProfit(selectedPartner.id, withdrawCompanyId);
+        const config = storeSettings.currencyConfigs[withdrawCurrency];
+        const amountInBase = withdrawCurrency === storeSettings.baseCurrency ? Number(withdrawAmount) : (config.method === 'multiply' ? Number(withdrawAmount) / Number(withdrawRate) : Number(withdrawAmount) * Number(withdrawRate));
+        
+        if (amountInBase > profit + 0.01) { // Adding a small buffer for floating point issues
+            alert(`مبلغ برداشت (${formatCurrency(amountInBase, storeSettings)}) نمی‌تواند بیشتر از سود قابل برداشت (${formatCurrency(profit, storeSettings)}) باشد.`);
+            return;
+        }
+
+        const result = await recordPartnerWithdrawal(
+            selectedPartner.id,
+            withdrawCompanyId,
+            Number(withdrawAmount),
+            withdrawCurrency,
+            Number(withdrawRate),
+            withdrawDescription
+        );
+        if (result.success) {
+            setIsWithdrawModalOpen(false);
+            setWithdrawAmount('');
+            setWithdrawDescription('');
+        }
+    };
+
+    const resetForm = () => {
+        setName('');
+        setShares([]);
+    };
+
+    const addShareRow = () => {
+        if (shares.length >= companies.length) {
+            alert("تعداد سطرهای سهم نمی‌تواند بیشتر از تعداد کمپانی‌ها باشد.");
+            return;
+        }
+        setShares([...shares, { companyId: '', percentage: 0 }]);
+    };
+
+    const removeShareRow = (index: number) => {
+        const share = shares[index];
+        if (editingPartner && share.companyId && !isShareDeletable(editingPartner.id, share.companyId)) {
+            alert("این سهم به دلیل وجود تراکنش برداشت قابل حذف نیست.");
+            return;
+        }
+        setShares(shares.filter((_, i) => i !== index));
+    };
+
+    const updateShare = (index: number, field: 'companyId' | 'percentage', value: string | number) => {
+        const newShares = [...shares];
+        newShares[index] = { ...newShares[index], [field]: value };
+        setShares(newShares);
+    };
+
+    return (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 className="text-2xl font-black text-slate-800">مدیریت شرکا</h2>
+                    <p className="text-slate-500 mt-1">مدیریت سهم‌الشرکه و برداشت‌های شرکای تجاری</p>
+                </div>
+                <button 
+                    onClick={() => {
+                        resetForm();
+                        setIsAddModalOpen(true);
+                    }}
+                    className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3.5 rounded-2xl font-black shadow-xl shadow-blue-100 hover:scale-[1.02] transition-all active:scale-95"
+                >
+                    <PlusIcon className="w-5 h-5" />
+                    <span>افزودن شریک جدید</span>
+                </button>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6">
+                {partners.length === 0 ? (
+                    <div className="py-20 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
+                        <UserGroupIcon className="w-16 h-16 text-slate-300 mx-auto mb-4" />
+                        <p className="text-slate-400 font-bold text-lg">هنوز هیچ شریکی ثبت نشده است.</p>
+                    </div>
+                ) : (
+                    partners.map(partner => (
+                        <div key={partner.id} className="bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all group overflow-hidden flex flex-col md:flex-row">
+                            <div className="p-6 flex-grow border-b md:border-b-0 md:border-l border-slate-100">
+                                <div className="flex items-center justify-between mb-6">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-14 h-14 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
+                                            <UserGroupIcon className="w-8 h-8" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-black text-2xl text-slate-800">{partner.name}</h3>
+                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1">شریک تجاری</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <button 
+                                            onClick={() => {
+                                                setEditingPartner(partner);
+                                                setName(partner.name);
+                                                setShares(partner.shares);
+                                            }}
+                                            className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                                        >
+                                            <EditIcon className="w-6 h-6" />
+                                        </button>
+                                        <button 
+                                            onClick={() => {
+                                                if(confirm(`آیا از حذف شریک "${partner.name}" اطمینان دارید؟`)) {
+                                                    deletePartner(partner.id);
+                                                }
+                                            }}
+                                            className="p-2.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                                        >
+                                            <TrashIcon className="w-6 h-6" />
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {partner.shares.map((share, idx) => {
+                                        const company = companies.find(c => c.id === share.companyId);
+                                        const profit = calculatePartnerProfit(partner.id, share.companyId);
+                                        return (
+                                            <div key={idx} className="bg-slate-50 p-4 rounded-2xl border border-slate-100 flex flex-col justify-between gap-3">
+                                                <div className="flex justify-between items-start">
+                                                    <div>
+                                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1">کمپانی</p>
+                                                        <span className="font-black text-slate-700">{company?.name || 'نامشخص'}</span>
+                                                    </div>
+                                                    <span className="bg-blue-600 text-white px-2 py-1 rounded-lg text-[10px] font-black">{share.percentage}% سهم</span>
+                                                </div>
+                                                <div className="pt-3 border-t border-slate-200/50">
+                                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1">سود قابل برداشت</p>
+                                                    <p className={`text-lg font-black ${profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                        {formatCurrency(profit, storeSettings)}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {partner.shares.length === 0 && (
+                                        <div className="col-span-full py-6 text-center text-slate-400 font-bold italic bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                                            بدون سهم‌الشرکه تعریف شده
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="p-6 bg-slate-50/50 flex flex-col justify-center items-center min-w-[240px] gap-4">
+                                <div className="text-center">
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">کل سود قابل برداشت</p>
+                                    <p className="text-2xl font-black text-blue-600">
+                                        {formatCurrency(
+                                            partner.shares.reduce((sum, s) => sum + calculatePartnerProfit(partner.id, s.companyId), 0),
+                                            storeSettings
+                                        )}
+                                    </p>
+                                </div>
+                                <button 
+                                    onClick={() => {
+                                        setSelectedPartner(partner);
+                                        setIsWithdrawModalOpen(true);
+                                    }}
+                                    className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black hover:bg-blue-700 transition-all shadow-xl shadow-blue-100 flex items-center justify-center gap-2"
+                                >
+                                    <span>ثبت برداشت وجه</span>
+                                </button>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+
+            {(isAddModalOpen || editingPartner) && (
+                <Modal 
+                    title={editingPartner ? "ویرایش اطلاعات شریک" : "افزودن شریک جدید"} 
+                    onClose={() => {
+                        setIsAddModalOpen(false);
+                        setEditingPartner(null);
+                        resetForm();
+                    }}
+                >
+                    <div className="space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-sm font-bold text-slate-600 mr-2">نام کامل شریک</label>
+                            <input 
+                                type="text"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder="مثلاً: احمد محمدی"
+                                className="w-full p-4 rounded-2xl border-2 border-slate-100 focus:border-blue-500 outline-none font-bold text-lg transition-all"
+                            />
+                        </div>
+
+                        <div className="space-y-4">
+                            <div className="flex items-center justify-between">
+                                <label className="text-sm font-bold text-slate-600 mr-2">تعیین سهم‌الشرکه</label>
+                                <button 
+                                    onClick={addShareRow}
+                                    className="text-blue-600 hover:text-blue-700 font-black text-sm flex items-center gap-1"
+                                >
+                                    <PlusIcon className="w-4 h-4" />
+                                    افزودن سطر
+                                </button>
+                            </div>
+                            
+                            <div className="space-y-3 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
+                                {shares.map((share, idx) => (
+                                    <div key={idx} className="flex gap-2 items-center animate-in slide-in-from-right-2 duration-300">
+                                        <select 
+                                            value={share.companyId}
+                                            onChange={(e) => updateShare(idx, 'companyId', e.target.value)}
+                                            className="flex-grow p-3 rounded-xl border-2 border-slate-100 focus:border-blue-500 outline-none font-bold"
+                                        >
+                                            <option value="">انتخاب کمپانی...</option>
+                                            {companies.map(c => (
+                                                <option key={c.id} value={c.id}>{c.name}</option>
+                                            ))}
+                                        </select>
+                                        <div className="relative w-24">
+                                            <input 
+                                                type="number"
+                                                value={share.percentage}
+                                                onChange={(e) => updateShare(idx, 'percentage', Number(e.target.value))}
+                                                className="w-full p-3 pr-8 rounded-xl border-2 border-slate-100 focus:border-blue-500 outline-none font-bold text-center"
+                                                placeholder="0"
+                                            />
+                                            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">%</span>
+                                        </div>
+                                        <button 
+                                            onClick={() => removeShareRow(idx)}
+                                            className="p-3 text-rose-500 hover:bg-rose-50 rounded-xl transition-all"
+                                        >
+                                            <TrashIcon className="w-5 h-5" />
+                                        </button>
+                                    </div>
+                                ))}
+                                {shares.length === 0 && (
+                                    <p className="text-center py-4 text-slate-400 text-sm italic bg-slate-50 rounded-2xl border-2 border-dashed border-slate-100">
+                                        هنوز هیچ سهمی تعریف نشده است.
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={editingPartner ? handleUpdatePartner : handleAddPartner}
+                            className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all active:scale-95"
+                        >
+                            {editingPartner ? "بروزرسانی اطلاعات" : "ثبت شریک جدید"}
+                        </button>
+                    </div>
+                </Modal>
+            )}
+
+            {isWithdrawModalOpen && selectedPartner && (
+                <Modal 
+                    title={`برداشت وجه - ${selectedPartner.name}`} 
+                    onClose={() => {
+                        setIsWithdrawModalOpen(false);
+                        setSelectedPartner(null);
+                    }}
+                >
+                    <div className="space-y-6">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-600 mr-2">مبلغ برداشت</label>
+                                <input 
+                                    type="number"
+                                    value={withdrawAmount}
+                                    onChange={(e) => setWithdrawAmount(e.target.value)}
+                                    className="w-full p-4 rounded-2xl border-2 border-slate-100 focus:border-blue-500 outline-none font-bold text-lg"
+                                    placeholder="0"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-600 mr-2">ارز</label>
+                                <select 
+                                    value={withdrawCurrency}
+                                    onChange={(e) => setWithdrawCurrency(e.target.value as any)}
+                                    className="w-full p-4 rounded-2xl border-2 border-slate-100 focus:border-blue-500 outline-none font-bold text-lg"
+                                >
+                                    <option value="AFN">AFN</option>
+                                    <option value="USD">USD</option>
+                                    <option value="IRT">IRT</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        {withdrawCurrency !== storeSettings.baseCurrency && (
+                            <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+                                <label className="text-sm font-bold text-slate-600 mr-2">نرخ تبدیل به {storeSettings.baseCurrency}</label>
+                                <input 
+                                    type="number"
+                                    value={withdrawRate}
+                                    onChange={(e) => setWithdrawRate(e.target.value)}
+                                    className="w-full p-4 rounded-2xl border-2 border-slate-100 focus:border-blue-500 outline-none font-bold text-lg"
+                                />
+                            </div>
+                        )}
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-bold text-slate-600 mr-2">برداشت از حساب کمپانی</label>
+                            <select 
+                                value={withdrawCompanyId}
+                                onChange={(e) => setWithdrawCompanyId(e.target.value)}
+                                className="w-full p-4 rounded-2xl border-2 border-slate-100 focus:border-blue-500 outline-none font-bold text-lg"
+                            >
+                                <option value="">انتخاب کمپانی...</option>
+                                {companies.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="text-sm font-bold text-slate-600 mr-2">توضیحات</label>
+                            <textarea 
+                                value={withdrawDescription}
+                                onChange={(e) => setWithdrawDescription(e.target.value)}
+                                className="w-full p-4 rounded-2xl border-2 border-slate-100 focus:border-blue-500 outline-none font-bold min-h-[100px]"
+                                placeholder="دلیل برداشت یا توضیحات تکمیلی..."
+                            />
+                        </div>
+
+                        <button 
+                            onClick={handleWithdraw}
+                            className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black text-lg shadow-xl shadow-emerald-100 hover:bg-emerald-600 transition-all active:scale-95"
+                        >
+                            تأیید و ثبت برداشت
+                        </button>
+                    </div>
+                </Modal>
+            )}
+        </div>
+    );
+};
+
+
 const Accounting: React.FC = () => {
     const { hasPermission } = useAppContext();
     const [activeTab, setActiveTab] = useState('suppliers');
@@ -1646,6 +2151,7 @@ const Accounting: React.FC = () => {
         { id: 'payroll', label: 'حقوق و دستمزد', icon: <UserGroupIcon className="w-5 h-5"/>, permission: 'accounting:manage_payroll' },
         { id: 'customers', label: 'مشتریان', icon: <UserGroupIcon className="w-5 h-5"/>, permission: 'accounting:manage_customers' },
         { id: 'expenses', label: 'مصارف', icon: <TrashIcon className="w-5 h-5"/>, permission: 'accounting:manage_expenses' },
+        { id: 'partners', label: 'شرکا', icon: <UserGroupIcon className="w-5 h-5"/>, permission: 'accounting:manage_customers' },
         { id: 'companies', label: 'کمپانی‌ها', icon: <BuildingIcon className="w-5 h-5"/>, permission: 'accounting:manage_suppliers' },
     ];
     
@@ -1665,6 +2171,7 @@ const Accounting: React.FC = () => {
             case 'payroll': return <PayrollTab />;
             case 'customers': return <CustomersTab />;
             case 'expenses': return <ExpensesTab />;
+            case 'partners': return <PartnersTab />;
             case 'companies': return <CompaniesTab />;
             default: return null;
         }

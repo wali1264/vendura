@@ -267,6 +267,15 @@ export interface Expense {
     amountBase?: number; // Equivalent in base currency
     date: string;
     relatedId?: string; // Link to purchase invoices or other entities
+    isHistorical?: boolean; // NEW: To record past expenses without affecting current cash
+    companyId?: string; // NEW: Link to company for specific expense tracking
+    partnerId?: string; // NEW: Link to partner for withdrawals
+}
+
+export interface Partner {
+    id: string;
+    name: string;
+    shares: { companyId: string; percentage: number }[]; // companyId 'global' for all-company share
 }
 
 export interface Company {
@@ -349,6 +358,7 @@ export interface AppState {
     wastageRecords: WastageRecord[];
     orders: Order[];
     companies: Company[];
+    partners: Partner[];
     saleInvoiceCounter: number;
     editingSaleInvoiceId: string | null;
     editingPurchaseInvoiceId: string | null;
