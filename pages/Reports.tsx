@@ -5,7 +5,7 @@ import DateRangeFilter from '../components/DateRangeFilter';
 import { formatCurrency, formatStockToPackagesAndUnits } from '../utils/formatters';
 import type { Product, SaleInvoice, User, Customer, Supplier, CustomerTransaction, SupplierTransaction, InTransitInvoice, Expense, CartItem, InvoiceItem } from '../types';
 import TransactionHistoryModal from '../components/TransactionHistoryModal';
-import { PrintIcon, WarningIcon, UserGroupIcon, InventoryIcon, AccountingIcon, POSIcon, ReportsIcon, DashboardIcon, TruckIcon, SafeIcon, ChartBarIcon, SearchIcon, ArchiveBoxXMarkIcon, BuildingIcon } from '../components/icons';
+import { PrintIcon, WarningIcon, UserGroupIcon, InventoryIcon, AccountingIcon, POSIcon, ReportsIcon, DashboardIcon, TruckIcon, SafeIcon, ChartBarIcon, SearchIcon, ArchiveBoxXMarkIcon, BuildingIcon, ZapIcon, TrashIcon } from '../components/icons';
 import ReportPrintPreviewModal from '../components/ReportPrintPreviewModal';
 
 const Reports: React.FC = () => {
@@ -852,22 +852,21 @@ const Reports: React.FC = () => {
                 });
 
                 // 2. Aggregate Stats
-                let totalPurchaseVal = 0;
                 let totalInventoryVal = 0;
                 let totalSalesVal = 0;
                 let totalCOGSVal = 0;
                 let totalWastageVal = 0;
+                let totalExpensesVal = 0;
 
-                // Purchases
-                perfPurchases.forEach(inv => {
-                    inv.items.forEach(item => {
-                        if (selectedProductId && item.productId !== selectedProductId) return;
-                        const rate = inv.exchangeRate || 1;
-                        const config = storeSettings.currencyConfigs[inv.currency || storeSettings.baseCurrency];
-                        const priceBase = (inv.currency || storeSettings.baseCurrency) === storeSettings.baseCurrency ? item.purchasePrice : (config?.method === 'multiply' ? item.purchasePrice / rate : item.purchasePrice * rate);
-                        totalPurchaseVal += priceBase * item.quantity;
-                    });
+                // Expenses
+                const perfExpenses = expenses.filter(e => {
+                    const t = new Date(e.date).getTime();
+                    const inRange = t >= dateRange.start.getTime() && t <= dateRange.end.getTime();
+                    const matchCompany = !selectedEntityId || e.companyId === selectedEntityId;
+                    // Exclude partner withdrawals from company expenses as they are profit distributions
+                    return inRange && matchCompany && e.category !== 'partner_withdrawal';
                 });
+                totalExpensesVal = perfExpenses.reduce((sum, e) => sum + (e.amountBase || 0), 0);
 
                 // Inventory (Current State)
                 products.forEach(p => {
@@ -903,7 +902,7 @@ const Reports: React.FC = () => {
                     totalWastageVal += w.totalCost;
                 });
 
-                const netProfit = totalSalesVal - totalCOGSVal - totalWastageVal;
+                const netProfit = totalSalesVal - totalCOGSVal - totalWastageVal - totalExpensesVal;
 
                 return (
                     <div className="space-y-6">
@@ -944,7 +943,7 @@ const Reports: React.FC = () => {
                         </div>
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                            <SmartStatCard title="ارزش کل خرید" value={formatCurrency(totalPurchaseVal, storeSettings)} color="text-slate-700" icon={<TruckIcon/>} />
+                            <SmartStatCard title="ارزش کل مصارف" value={formatCurrency(totalExpensesVal, storeSettings)} color="text-slate-700" icon={<TrashIcon/>} />
                             <SmartStatCard title="ارزش موجودی انبار" value={formatCurrency(totalInventoryVal, storeSettings)} color="text-blue-600" icon={<InventoryIcon/>} />
                             <SmartStatCard title="میزان فروش" value={formatCurrency(totalSalesVal, storeSettings)} color="text-emerald-600" icon={<POSIcon/>} />
                             <SmartStatCard title="سود خالص" value={formatCurrency(netProfit, storeSettings)} color={netProfit >= 0 ? "text-green-600" : "text-red-600"} icon={<DashboardIcon/>} />

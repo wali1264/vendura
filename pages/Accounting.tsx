@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppContext } from '../AppContext';
 import type { Supplier, Employee, Customer, Expense, AnyTransaction, CustomerTransaction, SupplierTransaction, PayrollTransaction, DepositHolder, Partner } from '../types';
-import { PlusIcon, XIcon, EyeIcon, TrashIcon, UserGroupIcon, AccountingIcon, TruckIcon, ChevronDownIcon, CheckIcon, EditIcon, FilterIcon, SettingsIcon, ArchiveBoxXMarkIcon, CheckCircleIcon, BuildingIcon, ZapIcon } from '../components/icons';
+import { PlusIcon, XIcon, EyeIcon, TrashIcon, UserGroupIcon, AccountingIcon, TruckIcon, ChevronDownIcon, CheckIcon, EditIcon, FilterIcon, SettingsIcon, ArchiveBoxXMarkIcon, CheckCircleIcon, BuildingIcon, ZapIcon, HistoryIcon, PrintIcon } from '../components/icons';
 import Toast from '../components/Toast';
 import { formatCurrency, toEnglishDigits, formatBalance } from '../utils/formatters';
 import TransactionHistoryModal from '../components/TransactionHistoryModal';
@@ -1339,7 +1339,14 @@ const ExpensesTab = () => {
                                 <td className="p-4 text-md text-slate-500 font-medium">{new Date(e.date).toLocaleDateString('fa-IR')}</td>
                                 <td className="p-4 text-lg font-bold text-slate-800 text-right">{e.description}</td>
                                 <td className="p-4">
-                                    <span className="px-3 py-1 bg-slate-100 rounded-full text-xs font-bold text-slate-500">{getCategoryLabel(e.category)}</span>
+                                    <div className="flex flex-col items-center gap-1">
+                                        <span className="px-3 py-1 bg-slate-100 rounded-full text-xs font-bold text-slate-500">{getCategoryLabel(e.category)}</span>
+                                        {e.category === 'partner_withdrawal' && e.partnerId && (
+                                            <span className="text-[10px] font-black text-emerald-600">
+                                                {partners.find(p => p.id === e.partnerId)?.name}
+                                            </span>
+                                        )}
+                                    </div>
                                 </td>
                                 <td className="p-4 text-xl font-bold text-red-600" dir="ltr">
                                     {e.amount.toLocaleString('en-US')} {e.currency || baseCurrency}
@@ -1371,6 +1378,11 @@ const ExpensesTab = () => {
                                 <h3 className="font-black text-lg text-slate-800 leading-tight">{e.description}</h3>
                                 <div className="flex gap-2 items-center mt-1.5">
                                     <span className="text-[10px] font-black bg-slate-100 px-2 py-0.5 rounded-full text-slate-500 uppercase">{getCategoryLabel(e.category)}</span>
+                                    {e.category === 'partner_withdrawal' && e.partnerId && (
+                                        <span className="text-[10px] font-black bg-emerald-50 px-2 py-0.5 rounded-full text-emerald-600">
+                                            {partners.find(p => p.id === e.partnerId)?.name}
+                                        </span>
+                                    )}
                                     <span className="text-[10px] text-slate-400 font-medium">{new Date(e.date).toLocaleDateString('fa-IR')}</span>
                                 </div>
                             </div>
@@ -1722,6 +1734,8 @@ const PartnersTab: React.FC = () => {
     const { partners, addPartner, updatePartner, deletePartner, companies, recordPartnerWithdrawal, storeSettings, saleInvoices, products, expenses } = useAppContext();
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+    const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
+    const [selectedPartnerForStatement, setSelectedPartnerForStatement] = useState<Partner | null>(null);
     const [selectedPartner, setSelectedPartner] = useState<Partner | null>(null);
     const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
     
@@ -1901,11 +1915,22 @@ const PartnersTab: React.FC = () => {
                                     <div className="flex gap-2">
                                         <button 
                                             onClick={() => {
+                                                setSelectedPartnerForStatement(partner);
+                                                setIsStatementModalOpen(true);
+                                            }}
+                                            className="p-2.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all"
+                                            title="صورت‌حساب برداشت‌ها"
+                                        >
+                                            <HistoryIcon className="w-6 h-6" />
+                                        </button>
+                                        <button 
+                                            onClick={() => {
                                                 setEditingPartner(partner);
                                                 setName(partner.name);
                                                 setShares(partner.shares);
                                             }}
                                             className="p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all"
+                                            title="ویرایش"
                                         >
                                             <EditIcon className="w-6 h-6" />
                                         </button>
@@ -2137,7 +2162,84 @@ const PartnersTab: React.FC = () => {
                     </div>
                 </Modal>
             )}
+
+            {isStatementModalOpen && selectedPartnerForStatement && (
+                <PartnerStatementModal 
+                    partner={selectedPartnerForStatement} 
+                    onClose={() => {
+                        setIsStatementModalOpen(false);
+                        setSelectedPartnerForStatement(null);
+                    }} 
+                />
+            )}
         </div>
+    );
+};
+
+const PartnerStatementModal = ({ partner, onClose }: { partner: Partner, onClose: () => void }) => {
+    const { expenses, companies, storeSettings } = useAppContext();
+    const partnerWithdrawals = expenses.filter(e => e.partnerId === partner.id && e.category === 'partner_withdrawal');
+    
+    const handlePrint = () => {
+        window.print();
+    };
+
+    return (
+        <Modal title={`صورت‌حساب برداشت‌های ${partner.name}`} onClose={onClose} maxWidth="max-w-4xl">
+            <div className="space-y-6 printable-area">
+                <div className="flex justify-between items-center no-print">
+                    <p className="text-slate-500 text-sm">لیست تمامی برداشت‌های ثبت شده برای این شریک</p>
+                    <button onClick={handlePrint} className="flex items-center gap-2 bg-slate-800 text-white px-4 py-2 rounded-xl text-sm font-bold shadow-lg hover:bg-slate-900 transition-all">
+                        <PrintIcon className="w-4 h-4" /> چاپ صورت‌حساب
+                    </button>
+                </div>
+
+                <div className="overflow-x-auto border border-slate-100 rounded-2xl print:border-none">
+                    <table className="w-full text-right border-collapse">
+                        <thead>
+                            <tr className="bg-slate-50 border-b border-slate-100 print:bg-slate-100">
+                                <th className="p-4 text-xs font-black text-slate-400 uppercase tracking-widest print:text-slate-800">تاریخ</th>
+                                <th className="p-4 text-xs font-black text-slate-400 uppercase tracking-widest print:text-slate-800">کمپانی</th>
+                                <th className="p-4 text-xs font-black text-slate-400 uppercase tracking-widest print:text-slate-800">شرح / بابت</th>
+                                <th className="p-4 text-xs font-black text-slate-400 uppercase tracking-widest text-left print:text-slate-800">مبلغ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {partnerWithdrawals.length === 0 ? (
+                                <tr>
+                                    <td colSpan={4} className="p-10 text-center text-slate-400 font-bold italic">تراکنشی یافت نشد.</td>
+                                </tr>
+                            ) : (
+                                partnerWithdrawals.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(w => {
+                                    const company = companies.find(c => c.id === w.companyId);
+                                    return (
+                                        <tr key={w.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors print:border-slate-200">
+                                            <td className="p-4 text-sm font-bold text-slate-600">{new Date(w.date).toLocaleDateString('fa-IR')}</td>
+                                            <td className="p-4 text-sm font-bold text-slate-800">{company?.name || '---'}</td>
+                                            <td className="p-4 text-sm font-medium text-slate-600">{w.description}</td>
+                                            <td className="p-4 text-sm font-black text-red-600 text-left" dir="ltr">
+                                                {w.amount.toLocaleString()} {w.currency}
+                                                <div className="text-[10px] text-slate-400 no-print">{formatCurrency(w.amountBase || w.amount, storeSettings)}</div>
+                                            </td>
+                                        </tr>
+                                    );
+                                })
+                            )}
+                        </tbody>
+                        {partnerWithdrawals.length > 0 && (
+                            <tfoot>
+                                <tr className="bg-slate-50/50 font-black print:bg-slate-100">
+                                    <td colSpan={3} className="p-4 text-slate-800 text-left">مجموع برداشت‌ها:</td>
+                                    <td className="p-4 text-red-600 text-left" dir="ltr">
+                                        {formatCurrency(partnerWithdrawals.reduce((sum, w) => sum + (w.amountBase || 0), 0), storeSettings)}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        )}
+                    </table>
+                </div>
+            </div>
+        </Modal>
     );
 };
 
