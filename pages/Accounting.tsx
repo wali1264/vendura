@@ -1356,10 +1356,20 @@ const ExpensesTab = () => {
                                 </td>
                                 <td className="p-4">
                                     <div className="flex items-center justify-center gap-2">
-                                        <button onClick={() => handleEditExpense(e)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="ویرایش">
+                                        <button 
+                                            onClick={() => handleEditExpense(e)} 
+                                            disabled={e.category === 'partner_withdrawal'}
+                                            className={`p-2 rounded-lg transition-colors ${e.category === 'partner_withdrawal' ? 'text-slate-300 cursor-not-allowed' : 'text-blue-500 hover:bg-blue-50'}`} 
+                                            title={e.category === 'partner_withdrawal' ? "مدیریت از بخش شرکا" : "ویرایش"}
+                                        >
                                             <EditIcon className="w-5 h-5" />
                                         </button>
-                                        <button onClick={() => { if(confirm('آیا از حذف این هزینه اطمینان دارید؟')) deleteExpense(e.id); }} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="حذف">
+                                        <button 
+                                            onClick={() => { if(confirm('آیا از حذف این هزینه اطمینان دارید؟')) deleteExpense(e.id); }} 
+                                            disabled={e.category === 'partner_withdrawal'}
+                                            className={`p-2 rounded-lg transition-colors ${e.category === 'partner_withdrawal' ? 'text-slate-300 cursor-not-allowed' : 'text-red-500 hover:bg-red-50'}`} 
+                                            title={e.category === 'partner_withdrawal' ? "مدیریت از بخش شرکا" : "حذف"}
+                                        >
                                             <TrashIcon className="w-5 h-5" />
                                         </button>
                                     </div>
@@ -1392,12 +1402,20 @@ const ExpensesTab = () => {
                             </div>
                         </div>
                         <div className="flex gap-2 border-t border-slate-50 pt-3">
-                            <button onClick={() => handleEditExpense(e)} className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold text-sm">
-                                <EditIcon className="w-4 h-4" /> ویرایش
-                            </button>
-                            <button onClick={() => { if(confirm('آیا از حذف این هزینه اطمینان دارید؟')) deleteExpense(e.id); }} className="flex-1 flex items-center justify-center gap-2 py-2 bg-red-50 text-red-600 rounded-xl font-bold text-sm">
-                                <TrashIcon className="w-4 h-4" /> حذف
-                            </button>
+                            {e.category === 'partner_withdrawal' ? (
+                                <div className="flex-1 py-2 text-center text-[10px] font-bold text-slate-400 italic bg-slate-50 rounded-xl">
+                                    قابل مدیریت از بخش شرکا
+                                </div>
+                            ) : (
+                                <>
+                                    <button onClick={() => handleEditExpense(e)} className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-50 text-blue-600 rounded-xl font-bold text-sm">
+                                        <EditIcon className="w-4 h-4" /> ویرایش
+                                    </button>
+                                    <button onClick={() => { if(confirm('آیا از حذف این هزینه اطمینان دارید؟')) deleteExpense(e.id); }} className="flex-1 flex items-center justify-center gap-2 py-2 bg-red-50 text-red-600 rounded-xl font-bold text-sm">
+                                        <TrashIcon className="w-4 h-4" /> حذف
+                                    </button>
+                                </>
+                            )}
                         </div>
                     </div>
                 ))}
@@ -1731,7 +1749,7 @@ const CompaniesTab: React.FC = () => {
 
 
 const PartnersTab: React.FC = () => {
-    const { partners, addPartner, updatePartner, deletePartner, companies, recordPartnerWithdrawal, storeSettings, saleInvoices, products, expenses } = useAppContext();
+    const { partners, addPartner, updatePartner, deletePartner, companies, recordPartnerWithdrawal, updatePartnerWithdrawal, storeSettings, saleInvoices, products, expenses } = useAppContext();
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
     const [isStatementModalOpen, setIsStatementModalOpen] = useState(false);
@@ -1747,6 +1765,20 @@ const PartnersTab: React.FC = () => {
     const [withdrawRate, setWithdrawRate] = useState('1');
     const [withdrawCompanyId, setWithdrawCompanyId] = useState('');
     const [withdrawDescription, setWithdrawDescription] = useState('');
+    const [withdrawDate, setWithdrawDate] = useState(new Date().toISOString());
+    const [isHistorical, setIsHistorical] = useState(false);
+    const [editingWithdrawal, setEditingWithdrawal] = useState<Expense | null>(null);
+
+    const resetWithdrawForm = () => {
+        setWithdrawAmount('');
+        setWithdrawCurrency(storeSettings.baseCurrency);
+        setWithdrawRate('1');
+        setWithdrawCompanyId('');
+        setWithdrawDescription('');
+        setWithdrawDate(new Date().toISOString());
+        setIsHistorical(false);
+        setEditingWithdrawal(null);
+    };
 
     const calculatePartnerProfit = (partnerId: string, companyId: string) => {
         const partner = partners.find(p => p.id === partnerId);
@@ -1825,23 +1857,47 @@ const PartnersTab: React.FC = () => {
         const config = storeSettings.currencyConfigs[withdrawCurrency];
         const amountInBase = withdrawCurrency === storeSettings.baseCurrency ? Number(withdrawAmount) : (config.method === 'multiply' ? Number(withdrawAmount) / Number(withdrawRate) : Number(withdrawAmount) * Number(withdrawRate));
         
-        if (amountInBase > profit + 0.01) { // Adding a small buffer for floating point issues
-            alert(`مبلغ برداشت (${formatCurrency(amountInBase, storeSettings)}) نمی‌تواند بیشتر از سود قابل برداشت (${formatCurrency(profit, storeSettings)}) باشد.`);
+        // If editing, we should compare with profit + original amount
+        const effectiveProfit = editingWithdrawal ? profit + (editingWithdrawal.amountBase || 0) : profit;
+
+        if (amountInBase > effectiveProfit + 0.01) { 
+            alert(`مبلغ برداشت (${formatCurrency(amountInBase, storeSettings)}) نمی‌تواند بیشتر از سود قابل برداشت (${formatCurrency(effectiveProfit, storeSettings)}) باشد.`);
             return;
         }
 
-        const result = await recordPartnerWithdrawal(
-            selectedPartner.id,
-            withdrawCompanyId,
-            Number(withdrawAmount),
-            withdrawCurrency,
-            Number(withdrawRate),
-            withdrawDescription
-        );
-        if (result.success) {
-            setIsWithdrawModalOpen(false);
-            setWithdrawAmount('');
-            setWithdrawDescription('');
+        if (editingWithdrawal) {
+            const result = await updatePartnerWithdrawal(editingWithdrawal.id, {
+                amount: Number(withdrawAmount),
+                currency: withdrawCurrency,
+                exchangeRate: Number(withdrawRate),
+                description: withdrawDescription.startsWith('برداشت شریک') ? withdrawDescription : `برداشت شریک (${selectedPartner.name}): ${withdrawDescription}`,
+                date: withdrawDate,
+                companyId: withdrawCompanyId,
+                isHistorical
+            });
+            if (result.success) {
+                setIsWithdrawModalOpen(false);
+                resetWithdrawForm();
+            } else {
+                alert(result.message);
+            }
+        } else {
+            const result = await recordPartnerWithdrawal(
+                selectedPartner.id,
+                withdrawCompanyId,
+                Number(withdrawAmount),
+                withdrawCurrency,
+                Number(withdrawRate),
+                withdrawDescription,
+                withdrawDate,
+                isHistorical
+            );
+            if (result.success) {
+                setIsWithdrawModalOpen(false);
+                resetWithdrawForm();
+            } else {
+                alert(result.message);
+            }
         }
     };
 
@@ -2085,13 +2141,29 @@ const PartnersTab: React.FC = () => {
 
             {isWithdrawModalOpen && selectedPartner && (
                 <Modal 
-                    title={`برداشت وجه - ${selectedPartner.name}`} 
+                    title={editingWithdrawal ? `ویرایش برداشت - ${selectedPartner.name}` : `برداشت وجه - ${selectedPartner.name}`} 
                     onClose={() => {
                         setIsWithdrawModalOpen(false);
                         setSelectedPartner(null);
+                        resetWithdrawForm();
                     }}
                 >
                     <div className="space-y-6">
+                        <JalaliDateInput value={withdrawDate} onChange={setWithdrawDate} label="تاریخ برداشت" />
+
+                        <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <input 
+                                type="checkbox" 
+                                id="isHistorical" 
+                                checked={isHistorical} 
+                                onChange={(e) => setIsHistorical(e.target.checked)}
+                                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                            />
+                            <label htmlFor="isHistorical" className="text-sm font-bold text-slate-700 cursor-pointer">
+                                ثبت به عنوان رکورد تاریخی (عدم کسر از موجودی فعلی)
+                            </label>
+                        </div>
+
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-2">
                                 <label className="text-sm font-bold text-slate-600 mr-2">مبلغ برداشت</label>
@@ -2155,9 +2227,9 @@ const PartnersTab: React.FC = () => {
 
                         <button 
                             onClick={handleWithdraw}
-                            className="w-full py-4 bg-emerald-500 text-white rounded-2xl font-black text-lg shadow-xl shadow-emerald-100 hover:bg-emerald-600 transition-all active:scale-95"
+                            className={`w-full py-4 text-white rounded-2xl font-black text-lg shadow-xl transition-all active:scale-95 ${editingWithdrawal ? 'bg-blue-600 shadow-blue-100 hover:bg-blue-700' : 'bg-emerald-500 shadow-emerald-100 hover:bg-emerald-600'}`}
                         >
-                            تأیید و ثبت برداشت
+                            {editingWithdrawal ? "بروزرسانی برداشت" : "تأیید و ثبت برداشت"}
                         </button>
                     </div>
                 </Modal>
@@ -2170,14 +2242,27 @@ const PartnersTab: React.FC = () => {
                         setIsStatementModalOpen(false);
                         setSelectedPartnerForStatement(null);
                     }} 
+                    onEditWithdrawal={(w) => {
+                        setEditingWithdrawal(w);
+                        setWithdrawAmount(w.amount.toString());
+                        setWithdrawCurrency(w.currency);
+                        setWithdrawRate(w.exchangeRate.toString());
+                        setWithdrawCompanyId(w.companyId || '');
+                        setWithdrawDescription(w.description.replace(/^برداشت شریک \(.*?\): /, ''));
+                        setWithdrawDate(w.date);
+                        setIsHistorical(w.isHistorical || false);
+                        setSelectedPartner(selectedPartnerForStatement);
+                        setIsWithdrawModalOpen(true);
+                        setIsStatementModalOpen(false);
+                    }}
                 />
             )}
         </div>
     );
 };
 
-const PartnerStatementModal = ({ partner, onClose }: { partner: Partner, onClose: () => void }) => {
-    const { expenses, companies, storeSettings } = useAppContext();
+const PartnerStatementModal = ({ partner, onClose, onEditWithdrawal }: { partner: Partner, onClose: () => void, onEditWithdrawal: (w: Expense) => void }) => {
+    const { expenses, companies, storeSettings, deletePartnerWithdrawal } = useAppContext();
     const partnerWithdrawals = expenses.filter(e => e.partnerId === partner.id && e.category === 'partner_withdrawal');
     
     const handlePrint = () => {
@@ -2202,12 +2287,13 @@ const PartnerStatementModal = ({ partner, onClose }: { partner: Partner, onClose
                                 <th className="p-4 text-xs font-black text-slate-400 uppercase tracking-widest print:text-slate-800">کمپانی</th>
                                 <th className="p-4 text-xs font-black text-slate-400 uppercase tracking-widest print:text-slate-800">شرح / بابت</th>
                                 <th className="p-4 text-xs font-black text-slate-400 uppercase tracking-widest text-left print:text-slate-800">مبلغ</th>
+                                <th className="p-4 text-xs font-black text-slate-400 uppercase tracking-widest text-center no-print">عملیات</th>
                             </tr>
                         </thead>
                         <tbody>
                             {partnerWithdrawals.length === 0 ? (
                                 <tr>
-                                    <td colSpan={4} className="p-10 text-center text-slate-400 font-bold italic">تراکنشی یافت نشد.</td>
+                                    <td colSpan={5} className="p-10 text-center text-slate-400 font-bold italic">تراکنشی یافت نشد.</td>
                                 </tr>
                             ) : (
                                 partnerWithdrawals.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(w => {
@@ -2215,11 +2301,36 @@ const PartnerStatementModal = ({ partner, onClose }: { partner: Partner, onClose
                                     return (
                                         <tr key={w.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors print:border-slate-200">
                                             <td className="p-4 text-sm font-bold text-slate-600">{new Date(w.date).toLocaleDateString('fa-IR')}</td>
-                                            <td className="p-4 text-sm font-bold text-slate-800">{company?.name || '---'}</td>
+                                            <td className="p-4 text-sm font-bold text-slate-800">
+                                                {company?.name || '---'}
+                                                {w.isHistorical && <span className="mr-2 text-[8px] bg-amber-100 text-amber-700 px-1 rounded">تاریخی</span>}
+                                            </td>
                                             <td className="p-4 text-sm font-medium text-slate-600">{w.description}</td>
                                             <td className="p-4 text-sm font-black text-red-600 text-left" dir="ltr">
                                                 {w.amount.toLocaleString()} {w.currency}
                                                 <div className="text-[10px] text-slate-400 no-print">{formatCurrency(w.amountBase || w.amount, storeSettings)}</div>
+                                            </td>
+                                            <td className="p-4 no-print">
+                                                <div className="flex items-center justify-center gap-1">
+                                                    <button 
+                                                        onClick={() => onEditWithdrawal(w)}
+                                                        className="p-1.5 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                                                        title="ویرایش"
+                                                    >
+                                                        <EditIcon className="w-4 h-4" />
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => {
+                                                            if (confirm('آیا از حذف این برداشت اطمینان دارید؟')) {
+                                                                deletePartnerWithdrawal(w.id);
+                                                            }
+                                                        }}
+                                                        className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                                                        title="حذف"
+                                                    >
+                                                        <TrashIcon className="w-4 h-4" />
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     );
@@ -2233,6 +2344,7 @@ const PartnerStatementModal = ({ partner, onClose }: { partner: Partner, onClose
                                     <td className="p-4 text-red-600 text-left" dir="ltr">
                                         {formatCurrency(partnerWithdrawals.reduce((sum, w) => sum + (w.amountBase || 0), 0), storeSettings)}
                                     </td>
+                                    <td className="no-print"></td>
                                 </tr>
                             </tfoot>
                         )}

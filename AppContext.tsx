@@ -125,7 +125,9 @@ interface AppContextType extends AppState {
     addPartner: (name: string, shares: { companyId: string; percentage: number }[]) => Promise<{ success: boolean; message: string }>;
     updatePartner: (id: string, name: string, shares: { companyId: string; percentage: number }[]) => Promise<{ success: boolean; message: string }>;
     deletePartner: (id: string) => Promise<{ success: boolean; message: string }>;
-    recordPartnerWithdrawal: (partnerId: string, companyId: string, amount: number, currency: 'AFN' | 'USD' | 'IRT', rate: number, description: string) => Promise<{ success: boolean; message: string }>;
+    recordPartnerWithdrawal: (partnerId: string, companyId: string, amount: number, currency: 'AFN' | 'USD' | 'IRT', rate: number, description: string, date?: string, isHistorical?: boolean) => Promise<{ success: boolean; message: string }>;
+    updatePartnerWithdrawal: (expenseId: string, updates: Partial<Expense>) => Promise<{ success: boolean; message: string }>;
+    deletePartnerWithdrawal: (expenseId: string) => Promise<{ success: boolean; message: string }>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -2139,7 +2141,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         return { success: true, message: "شریک با موفقیت حذف شد." };
     };
 
-    const recordPartnerWithdrawal = async (partnerId: string, companyId: string, amount: number, currency: 'AFN' | 'USD' | 'IRT', rate: number, description: string) => {
+    const recordPartnerWithdrawal = async (partnerId: string, companyId: string, amount: number, currency: 'AFN' | 'USD' | 'IRT', rate: number, description: string, date?: string, isHistorical?: boolean) => {
         const partner = state.partners.find(p => p.id === partnerId);
         if (!partner) return { success: false, message: "شریک یافت نشد." };
 
@@ -2154,14 +2156,40 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             exchangeRate: rate,
             amountBase: baseAmount,
             description: `برداشت شریک (${partner.name}): ${description}`,
-            date: new Date().toISOString(),
+            date: date || new Date().toISOString(),
             companyId,
-            partnerId
+            partnerId,
+            isHistorical: isHistorical || false
         };
 
         await api.addExpense(expense);
         await fetchData(true);
         return { success: true, message: "برداشت شریک با موفقیت ثبت شد." };
+    };
+
+    const updatePartnerWithdrawal = async (expenseId: string, updates: Partial<Expense>) => {
+        const existing = state.expenses.find(e => e.id === expenseId);
+        if (!existing) return { success: false, message: "رکورد یافت نشد." };
+
+        const updatedExpense = { ...existing, ...updates };
+        
+        // Recalculate base amount if amount, currency or rate changed
+        if (updates.amount !== undefined || updates.currency !== undefined || updates.exchangeRate !== undefined) {
+            const cur = updatedExpense.currency;
+            const rate = updatedExpense.exchangeRate;
+            const config = state.storeSettings.currencyConfigs[cur];
+            updatedExpense.amountBase = cur === state.storeSettings.baseCurrency ? updatedExpense.amount : (config.method === 'multiply' ? updatedExpense.amount / rate : updatedExpense.amount * rate);
+        }
+
+        await api.updateExpense(updatedExpense);
+        await fetchData(true);
+        return { success: true, message: "برداشت شریک با موفقیت بروزرسانی شد." };
+    };
+
+    const deletePartnerWithdrawal = async (expenseId: string) => {
+        await api.deleteExpense(expenseId);
+        await fetchData(true);
+        return { success: true, message: "برداشت شریک با موفقیت حذف شد." };
     };
 
     const addExpense = (e: any) => { 
@@ -2258,7 +2286,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         addInTransitInvoice, updateInTransitInvoice, deleteInTransitInvoice, archiveInTransitInvoice, moveInTransitItems, addInTransitPayment,
         updateSettings, addService, deleteService, addCompany, updateCompany, deleteCompany, addSupplier, updateSupplier, deleteSupplier, addSupplierPayment, updateSupplierTransaction, deleteSupplierTransaction, addCustomer, updateCustomer, deleteCustomer, addCustomerPayment, updateCustomerTransaction, deleteCustomerTransaction,
         addEmployee, updateEmployee, deleteEmployee, toggleEmployeeActive, addEmployeeAdvance, addEmployeeAdvanceToEmployee, processAndPaySalaries, addExpense, updateExpense, deleteExpense, setInvoiceTransientCustomer,
-        addPartner, updatePartner, deletePartner, recordPartnerWithdrawal,
+        addPartner, updatePartner, deletePartner, recordPartnerWithdrawal, updatePartnerWithdrawal, deletePartnerWithdrawal,
         addDepositHolder, deleteDepositHolder, processDepositTransaction
     }}>{children}</AppContext.Provider>;
 };
