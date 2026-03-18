@@ -258,7 +258,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const adminRoleIndex = roles.findIndex(r => r.id === 'admin-role');
             if (adminRoleIndex !== -1) {
                 const adminRole = roles[adminRoleIndex];
-                const newPermissions = ['page:orders', 'orders:create', 'orders:edit', 'orders:delete', 'orders:add_payment'];
+                const newPermissions = ['page:orders', 'orders:create', 'orders:edit', 'orders:delete', 'orders:add_payment', 'page:special_reports'];
                 const missingPermissions = newPermissions.filter(p => !adminRole.permissions.includes(p));
                 
                 if (missingPermissions.length > 0) {
@@ -327,7 +327,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     ...prev,
                     storeSettings: mergedSettings,
                     users,
-                    roles: roles.length > 0 ? roles : [{ id: 'admin-role', name: 'Admin', permissions: ['page:dashboard', 'page:inventory', 'page:pos', 'page:purchases', 'page:accounting', 'page:reports', 'page:settings', 'page:in_transit', 'page:deposits', 'page:orders', 'orders:create', 'orders:edit', 'orders:delete', 'orders:add_payment'] }],
+                    roles: roles.length > 0 ? roles : [{ id: 'admin-role', name: 'Admin', permissions: ['page:dashboard', 'page:inventory', 'page:pos', 'page:purchases', 'page:accounting', 'page:reports', 'page:settings', 'page:in_transit', 'page:deposits', 'page:orders', 'orders:create', 'orders:edit', 'orders:delete', 'orders:add_payment', 'page:special_reports'] }],
                     products: patchedProducts, 
                     services, 
                     customers: patchedCustomers, 
@@ -1057,6 +1057,57 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         const supplierTx: SupplierTransaction = { id: crypto.randomUUID(), supplierId: supplierIntermediaryId || '', type: 'payment', amount: totalTransactional, date: finalInv.timestamp, description: `فروش کالا (واسطه) - فاکتور #${invId}`, invoiceId: invId, currency, isCash: false };
 
         try {
+            // --- Activity Feature Logic ---
+            if (customerId) {
+                const customer = state.customers.find(c => c.id === customerId);
+                if (customer?.activityConfig) {
+                    const { depositHolderId, companyShares } = customer.activityConfig;
+                    
+                    let sharesToApply = companyShares;
+                    if (editingSaleInvoiceId) {
+                        // Use historical shares if available
+                        if (oldInv?.appliedShares) {
+                            sharesToApply = oldInv.appliedShares;
+                        }
+                        
+                        // Delete previous activity deposit if it exists
+                        if (oldInv?.activityDepositId) {
+                            await deleteDepositTransaction(oldInv.activityDepositId);
+                        }
+                    }
+
+                    let totalActivityShare = 0;
+                    finalInv.items.forEach(item => {
+                        if (item.type === 'product') {
+                            const product = state.products.find(p => p.id === item.id);
+                            const companyId = product?.companyId;
+                            if (companyId && sharesToApply[companyId] !== undefined) {
+                                const sharePercentage = sharesToApply[companyId];
+                                const itemTotalTransactional = (item.finalPrice !== undefined ? item.finalPrice : item.salePrice) * item.quantity;
+                                totalActivityShare += (itemTotalTransactional * sharePercentage) / 100;
+                            }
+                        }
+                    });
+
+                    if (totalActivityShare > 0) {
+                        const result = await processDepositTransaction(
+                            depositHolderId,
+                            'deposit',
+                            totalActivityShare,
+                            currency,
+                            `اکتیویتی - فاکتور فروش #${invId}`,
+                            exchangeRate,
+                            false
+                        );
+                        if (result.success && result.id) {
+                            finalInv.activityDepositId = result.id;
+                            finalInv.appliedShares = sharesToApply;
+                        }
+                    }
+                }
+            }
+            // ------------------------------
+
             if (editingSaleInvoiceId) {
                 const stockRestores: {batchId: string, quantity: number}[] = [];
                 oldInv?.items.forEach(it => {
@@ -1246,6 +1297,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                         newBalances: { AFN: newAFN, USD: newUSD, IRT: newIRT, Total: newTotal }
                     };
                 }
+            }
+
+            if (invoice.activityDepositId) {
+                await deleteDepositTransaction(invoice.activityDepositId);
             }
 
             await api.deleteSale(invoiceId, stockRestores, customerUpdate, supplierUpdate);
@@ -2010,7 +2065,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             Total: c.balance + (baseAmount * multiplier) 
         };
 
-        await api.processPayment('customer', cid, newB, tx);
+        const extraFields = (type === 'payment' && c.activityConfig) ? { activityConfig: null } : {};
+
+        await api.processPayment('customer', cid, newB, tx, extraFields);
         
         if (trusteeId) {
             await processDepositTransaction(
@@ -2256,7 +2313,31 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         await api.updateDepositHolder(newH);
         await api.addDepositTransaction(tx);
         await fetchData(true);
-        return { success: true, message: 'تراکنش با موفقیت ثبت شد.' };
+        return { success: true, message: 'تراکنش با موفقیت ثبت شد.', id: tx.id };
+    };
+
+    const deleteDepositTransaction = async (id: string) => {
+        const tx = state.depositTransactions.find(t => t.id === id);
+        if (!tx) return;
+        
+        const holder = state.depositHolders.find(h => h.id === tx.holderId);
+        if (!holder) return;
+        
+        const config = state.storeSettings.currencyConfigs[tx.currency as 'AFN'|'USD'|'IRT'];
+        const rate = tx.exchangeRate || 1;
+        const baseAmount = tx.currency === state.storeSettings.baseCurrency ? tx.amount : (config.method === 'multiply' ? tx.amount / rate : tx.amount * rate);
+        
+        const newH = { ...holder };
+        const factor = tx.type === 'deposit' ? -1 : 1; // Reverse the effect
+        if (tx.currency === 'USD') newH.balanceUSD += factor * tx.amount; 
+        else if (tx.currency === 'IRT') newH.balanceIRT += factor * tx.amount; 
+        else newH.balanceAFN += factor * tx.amount;
+        
+        newH.balance = (newH.balance !== undefined ? newH.balance : 0) + (factor * baseAmount);
+
+        await api.updateDepositHolder(newH);
+        await api.deleteDepositTransaction(id);
+        await fetchData(true);
     };
 
     const setInvoiceTransientCustomer = async (id: string, name: string) => {
@@ -2287,7 +2368,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         updateSettings, addService, deleteService, addCompany, updateCompany, deleteCompany, addSupplier, updateSupplier, deleteSupplier, addSupplierPayment, updateSupplierTransaction, deleteSupplierTransaction, addCustomer, updateCustomer, deleteCustomer, addCustomerPayment, updateCustomerTransaction, deleteCustomerTransaction,
         addEmployee, updateEmployee, deleteEmployee, toggleEmployeeActive, addEmployeeAdvance, addEmployeeAdvanceToEmployee, processAndPaySalaries, addExpense, updateExpense, deleteExpense, setInvoiceTransientCustomer,
         addPartner, updatePartner, deletePartner, recordPartnerWithdrawal, updatePartnerWithdrawal, deletePartnerWithdrawal,
-        addDepositHolder, deleteDepositHolder, processDepositTransaction
+        addDepositHolder, deleteDepositHolder, processDepositTransaction, deleteDepositTransaction
     }}>{children}</AppContext.Provider>;
 };
 

@@ -225,6 +225,7 @@ export const api = {
     updateDepositHolder: async (holder: DepositHolder) => db.putItem(db.STORES.DEPOSIT_HOLDERS, holder),
     deleteDepositHolder: async (id: string) => db.deleteItem(db.STORES.DEPOSIT_HOLDERS, id),
     addDepositTransaction: async (tx: DepositTransaction) => db.putItem(db.STORES.DEPOSIT_TRANSACTIONS, tx),
+    deleteDepositTransaction: async (id: string) => db.deleteItem(db.STORES.DEPOSIT_TRANSACTIONS, id),
 
     getTransactions: async () => {
         const [customerTransactions, supplierTransactions, payrollTransactions, depositTransactions] = await Promise.all([
@@ -516,13 +517,14 @@ export const api = {
         }
     },
 
-    processPayment: async (entityType: 'customer' | 'supplier' | 'employee', entityId: string, newBalance: any, transaction: any) => {
+    processPayment: async (entityType: 'customer' | 'supplier' | 'employee', entityId: string, newBalance: any, transaction: any, extraFields?: any) => {
         const store = entityType === 'customer' ? db.STORES.CUSTOMERS : (entityType === 'supplier' ? db.STORES.SUPPLIERS : db.STORES.EMPLOYEES);
         const txStore = entityType === 'customer' ? db.STORES.CUSTOMER_TX : (entityType === 'supplier' ? db.STORES.SUPPLIER_TX : db.STORES.PAYROLL_TX);
         const entity = await db.getById<any>(store, entityId);
         if (entity) {
             await db.putItem(store, { 
                 ...entity, 
+                ...extraFields,
                 balanceAFN: newBalance.AFN, 
                 balanceUSD: newBalance.USD, 
                 balanceIRT: newBalance.IRT, 

@@ -8,6 +8,7 @@ import { formatCurrency, toEnglishDigits, formatBalance } from '../utils/formatt
 import TransactionHistoryModal from '../components/TransactionHistoryModal';
 import ReceiptPreviewModal from '../components/ReceiptPreviewModal';
 import JalaliDateInput from '../components/JalaliDateInput';
+import { ActivitySettingsModal } from '../components/ActivitySettingsModal';
 
 const Modal: React.FC<{ title: string, onClose: () => void, children: React.ReactNode, headerAction?: React.ReactNode }> = ({ title, onClose, children, headerAction }) => (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center z-[100] p-4 pt-12 md:pt-20 overflow-y-auto modal-animate">
@@ -692,7 +693,7 @@ const PayrollTab = () => {
 };
 
 const CustomersTab = () => {
-    const { customers, depositHolders, addCustomer, updateCustomer, deleteCustomer, addCustomerPayment, customerTransactions, storeSettings } = useAppContext();
+    const { customers, depositHolders, companies, addCustomer, updateCustomer, deleteCustomer, addCustomerPayment, customerTransactions, storeSettings } = useAppContext();
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isPayModalOpen, setIsPayModalOpen] = useState(false);
     const [transactionType, setTransactionType] = useState<'payment' | 'receipt'>('payment');
@@ -701,6 +702,43 @@ const CustomersTab = () => {
     const [toast, setToast] = useState('');
     const [historyModalData, setHistoryModalData] = useState<{ person: Customer, transactions: CustomerTransaction[] } | null>(null);
     const [receiptModalData, setReceiptModalData] = useState<{ person: Customer, transaction: CustomerTransaction } | null>(null);
+
+    const [isActivitySettingsModalOpen, setIsActivitySettingsModalOpen] = useState(false);
+    const [activitySettingsCustomer, setActivitySettingsCustomer] = useState<Customer | null>(null);
+    const [clickCount, setClickCount] = useState<{ [id: string]: number }>({});
+    const [lastClickTime, setLastClickTime] = useState<{ [id: string]: number }>({});
+
+    const handleCustomerClick = (customer: Customer) => {
+        const now = Date.now();
+        const lastTime = lastClickTime[customer.id] || 0;
+        const count = clickCount[customer.id] || 0;
+
+        if (now - lastTime < 500) {
+            const newCount = count + 1;
+            if (newCount >= 5) {
+                setActivitySettingsCustomer(customer);
+                setIsActivitySettingsModalOpen(true);
+                setClickCount({ ...clickCount, [customer.id]: 0 });
+            } else {
+                setClickCount({ ...clickCount, [customer.id]: newCount });
+            }
+        } else {
+            setClickCount({ ...clickCount, [customer.id]: 1 });
+        }
+        setLastClickTime({ ...lastClickTime, [customer.id]: now });
+    };
+
+    const eligibleActivityHolders = useMemo(() => {
+        const linkedIds = customers.map(c => c.linkedDepositHolderId).filter(Boolean);
+        const activityIds = customers.map(c => c.activityConfig?.depositHolderId).filter(Boolean);
+        const allUsedIds = [...linkedIds, ...activityIds];
+        
+        return depositHolders.filter(h => !allUsedIds.includes(h.id) || (activitySettingsCustomer?.activityConfig?.depositHolderId === h.id));
+    }, [depositHolders, customers, activitySettingsCustomer]);
+
+    const designatedPersonIds = useMemo(() => {
+        return customers.map(c => c.activityConfig?.depositHolderId).filter(Boolean) as string[];
+    }, [customers]);
 
     const baseCurrency = storeSettings.baseCurrency || 'AFN';
     const baseCurrencyName = storeSettings.currencyConfigs[baseCurrency]?.name || 'AFN';
@@ -897,7 +935,7 @@ const CustomersTab = () => {
                     <tbody>
                         {customers.map(c => (
                             <tr key={c.id} className="border-t border-gray-200 hover:bg-blue-50/30 transition-colors">
-                                <td className="p-4 text-lg font-bold text-slate-800">{c.name}</td>
+                                <td onClick={() => handleCustomerClick(c)} className="p-4 text-lg font-bold text-slate-800 cursor-pointer select-none">{c.name}</td>
                                 <td className="p-4 text-md text-slate-600">{c.phone}</td>
                                 <td className="p-4 text-md font-black" dir="ltr">
                                     <div className="flex flex-col gap-1 items-center">
@@ -954,7 +992,7 @@ const CustomersTab = () => {
                      <div key={c.id} className="bg-white/80 backdrop-blur-xl p-5 rounded-2xl shadow-md border border-slate-100 active:scale-[0.98] transition-all">
                         <div className="flex justify-between items-start mb-1">
                            <div className="flex flex-col">
-                                <h3 className="font-black text-xl text-slate-800">{c.name}</h3>
+                                <h3 onClick={() => handleCustomerClick(c)} className="font-black text-xl text-slate-800 cursor-pointer select-none">{c.name}</h3>
                                 <p className="text-xs text-slate-400 font-medium">{c.phone || 'بدون شماره'}</p>
                            </div>
                            <div className="flex gap-2">
@@ -1009,6 +1047,7 @@ const CustomersTab = () => {
                     <form onSubmit={handleAddCustomerForm} className="space-y-4">
                         <input name="name" defaultValue={editingCustomer?.name} placeholder="نام مشتری" className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50" required/>
                         <input name="phone" defaultValue={editingCustomer?.phone} placeholder="شماره تلفن" className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50" />
+
                         <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 space-y-4">
                             <p className="text-sm font-black text-blue-800">تراز اول دوره (اختیاری)</p>
                             <div className="flex gap-4">
@@ -1085,7 +1124,7 @@ const CustomersTab = () => {
                                                 <span className="text-xs font-bold">بدون واسط (نقدی مستقیم)</span>
                                                 {selectedTrusteeId === '' && <CheckIcon className="w-4 h-4" />}
                                             </button>
-                                            {depositHolders.map(holder => (
+                                            {depositHolders.filter(h => !designatedPersonIds.includes(h.id) || h.id === selectedTrusteeId).map(holder => (
                                                 <button 
                                                     key={holder.id}
                                                     onClick={() => { setSelectedTrusteeId(holder.id); setIsTrusteeMenuOpen(false); }}
@@ -1166,6 +1205,23 @@ const CustomersTab = () => {
             )}
             {receiptModalData && (
                 <ReceiptPreviewModal person={receiptModalData.person} transaction={receiptModalData.transaction} type="customer" onClose={() => setReceiptModalData(null)} />
+            )}
+            {isActivitySettingsModalOpen && activitySettingsCustomer && (
+                <ActivitySettingsModal
+                    customer={activitySettingsCustomer}
+                    depositHolders={eligibleActivityHolders}
+                    companies={companies}
+                    onClose={() => {
+                        setIsActivitySettingsModalOpen(false);
+                        setActivitySettingsCustomer(null);
+                    }}
+                    onSave={async (config) => {
+                        await updateCustomer({
+                            ...activitySettingsCustomer,
+                            activityConfig: config
+                        });
+                    }}
+                />
             )}
         </div>
     );

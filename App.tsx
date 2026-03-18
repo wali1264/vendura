@@ -10,6 +10,7 @@ import SecurityDeposits from './pages/SecurityDeposits';
 import Settings from './pages/Settings';
 import Login from './pages/Login';
 import Reports from './pages/Reports';
+import SpecialReports from './pages/SpecialReports';
 import Orders from './pages/Orders';
 import UpdatePrompt from './components/UpdatePrompt';
 import { AppProvider, useAppContext } from './AppContext';
@@ -44,6 +45,7 @@ const AppContent: React.FC = () => {
       accounting: hasPermission('page:accounting'),
       deposits: hasPermission('page:deposits'),
       reports: hasPermission('page:reports'),
+      special_reports: hasPermission('page:special_reports'),
       settings: hasPermission('page:settings'),
       orders: hasPermission('page:orders'),
   }), [hasPermission]);
@@ -57,6 +59,7 @@ const AppContent: React.FC = () => {
       accounting: 'حسابداری',
       deposits: 'امانات',
       reports: 'گزارشات',
+      special_reports: 'گزارشات تخصصی',
       settings: 'تنظیمات',
       orders: 'سفارشات',
   };
@@ -87,6 +90,7 @@ const AppContent: React.FC = () => {
       case 'accounting': return accessiblePages.accounting && <Accounting />;
       case 'deposits': return accessiblePages.deposits && <SecurityDeposits />;
       case 'reports': return accessiblePages.reports && <Reports />;
+      case 'special_reports': return accessiblePages.special_reports && <SpecialReports />;
       case 'settings': return accessiblePages.settings && <Settings />;
       case 'orders': return accessiblePages.orders && <Orders />;
       default: return accessiblePages.dashboard && <Dashboard />;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { DashboardIcon, InventoryIcon, POSIcon, PurchaseIcon, TruckIcon, AccountingIcon, SettingsIcon, LogoutIcon, ReportsIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon, KeyIcon, UserGroupIcon, XIcon, SafeIcon, ClipboardDocumentListIcon } from './icons';
+import { DashboardIcon, InventoryIcon, POSIcon, PurchaseIcon, TruckIcon, AccountingIcon, SettingsIcon, LogoutIcon, ReportsIcon, ChevronDoubleLeftIcon, ChevronDoubleRightIcon, KeyIcon, UserGroupIcon, XIcon, SafeIcon, ClipboardDocumentListIcon, ZapIcon } from './icons';
 import { useAppContext } from '../AppContext';
 
 interface SidebarProps {
@@ -47,6 +47,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activeView, setActiveView, storeName,
     { id: 'accounting', label: 'حسابداری', icon: <AccountingIcon />, visible: accessiblePages.accounting },
     { id: 'deposits', label: 'امانات', icon: <SafeIcon className="w-6 h-6 text-indigo-600" />, visible: accessiblePages.deposits },
     { id: 'reports', label: 'گزارشات', icon: <ReportsIcon />, visible: accessiblePages.reports },
+    { id: 'special_reports', label: 'گزارشات تخصصی', icon: <ZapIcon className="w-6 h-6 text-amber-500" />, visible: accessiblePages.special_reports },
     { id: 'settings', label: 'تنظیمات', icon: <SettingsIcon />, visible: accessiblePages.settings },
   ];
   

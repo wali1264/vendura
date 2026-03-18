@@ -55,6 +55,8 @@ export interface SaleInvoice {
   supplierIntermediaryId?: string; // Optional: for sales to suppliers
   currency: 'AFN' | 'USD' | 'IRT'; // Multi-currency support
   exchangeRate: number;            // Rate to base currency (AFN)
+  appliedShares?: { [companyId: string]: number };
+  activityDepositId?: string;
 }
 
 export interface PurchaseInvoiceItem {
@@ -232,6 +234,11 @@ export interface Customer {
     balanceAFN: number; // Positive means they owe us AFN
     balanceUSD: number; // Positive means they owe us USD
     balanceIRT: number; // Positive means they owe us IRT
+    linkedDepositHolderId?: string;
+    activityConfig?: {
+        depositHolderId: string;
+        companyShares: { [companyId: string]: number };
+    };
     initialBalanceDate?: string;
     initialBalanceDescription?: string;
     initialBalance?: number;
