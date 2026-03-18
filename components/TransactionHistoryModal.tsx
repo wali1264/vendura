@@ -19,6 +19,7 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
     const { storeSettings, updateCustomerTransaction, deleteCustomerTransaction, updateSupplierTransaction, deleteSupplierTransaction } = useAppContext();
     const [dateRange, setDateRange] = useState<{ start: Date, end: Date }>({ start: new Date(), end: new Date() });
     const [isPrintPreviewOpen, setIsPrintPreviewOpen] = useState(false);
+    const [showGregorianDate, setShowGregorianDate] = useState(false);
     const [editingTransaction, setEditingTransaction] = useState<any>(null);
     const [editAmount, setEditAmount] = useState('');
     const [editDescription, setEditDescription] = useState('');
@@ -157,7 +158,18 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
 
                     return (
                         <tr key={t.id} className="hover:bg-blue-50 transition-colors border-b last:border-0">
-                            <td data-label="تاریخ" className="p-3 text-slate-600">{new Date(t.date).toLocaleDateString('fa-IR')}</td>
+                            <td data-label="تاریخ" className="p-3 text-slate-600">
+                                <div className="flex flex-col items-center leading-tight">
+                                    {showGregorianDate && (
+                                        <span className="text-[9px] text-slate-400 font-medium mb-0.5">
+                                            {new Date(t.date).toLocaleDateString('en-US')}
+                                        </span>
+                                    )}
+                                    <span className={showGregorianDate ? "mt-0.5" : ""}>
+                                        {new Date(t.date).toLocaleDateString('fa-IR')}
+                                    </span>
+                                </div>
+                            </td>
                             <td data-label="شرح" className="p-3 text-slate-800 font-semibold">
                                 <div className="flex items-center gap-2">
                                     {t.description}
@@ -228,6 +240,15 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
                             )}
                         </div>
                         <div className="flex items-center gap-2">
+                            <label className="flex items-center gap-2 cursor-pointer bg-white border border-slate-200 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors no-print">
+                                <input 
+                                    type="checkbox" 
+                                    checked={showGregorianDate} 
+                                    onChange={(e) => setShowGregorianDate(e.target.checked)}
+                                    className="w-4 h-4 text-blue-600 rounded"
+                                />
+                                <span className="text-[10px] font-black text-slate-600">نمایش تاریخ میلادی</span>
+                            </label>
                             <button onClick={() => setIsPrintPreviewOpen(true)} className="p-2.5 bg-blue-50 text-blue-600 border border-blue-100 rounded-xl hover:bg-blue-100 transition-colors" title="چاپ گزارش">
                                 <PrintIcon className="w-6 h-6" /> 
                             </button>

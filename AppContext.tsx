@@ -119,7 +119,9 @@ interface AppContextType extends AppState {
     // Security Deposits
     addDepositHolder: (holder: Omit<DepositHolder, 'id' | 'balance' | 'balanceAFN' | 'balanceUSD' | 'balanceIRT' | 'createdAt'>) => Promise<void>;
     deleteDepositHolder: (id: string) => Promise<void>;
-    processDepositTransaction: (holderId: string, type: 'deposit' | 'withdrawal', amount: number, currency: 'AFN' | 'USD' | 'IRT', description: string, exchangeRate?: number, isCash?: boolean) => Promise<{ success: boolean; message: string }>;
+    processDepositTransaction: (holderId: string, type: 'deposit' | 'withdrawal', amount: number, currency: 'AFN' | 'USD' | 'IRT', description: string, exchangeRate?: number, isCash?: boolean, date?: string, isHistorical?: boolean, isManual?: boolean) => Promise<{ success: boolean; message: string }>;
+    updateDepositTransaction: (transaction: DepositTransaction) => Promise<{ success: boolean; message: string }>;
+    deleteDepositTransaction: (id: string) => Promise<void>;
 
     // Partners
     addPartner: (name: string, shares: { companyId: string; percentage: number }[]) => Promise<{ success: boolean; message: string }>;
@@ -2285,7 +2287,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
     const addDepositHolder = async (h: any) => { await api.addDepositHolder(h); await fetchData(true); };
     const deleteDepositHolder = async (id: string) => { await api.deleteDepositHolder(id); await fetchData(true); };
-    const processDepositTransaction = async (hid: string, t: any, a: number, c: any, d: string, rate: number = 1, isCash: boolean = true) => {
+    const processDepositTransaction = async (hid: string, t: any, a: number, c: any, d: string, rate: number = 1, isCash: boolean = true, date?: string, isHistorical: boolean = false, isManual: boolean = false) => {
         const holder = state.depositHolders.find(x => x.id === hid);
         const tx: DepositTransaction = { 
             id: crypto.randomUUID(), 
@@ -2294,9 +2296,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             amount: a, 
             currency: c, 
             description: d, 
-            date: new Date().toISOString(),
+            date: date ? new Date(date).toISOString() : new Date().toISOString(),
             exchangeRate: rate,
-            isCash
+            isCash,
+            isHistorical,
+            isManual
         };
         
         const config = state.storeSettings.currencyConfigs[c as 'AFN'|'USD'|'IRT'];
@@ -2314,6 +2318,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         await api.addDepositTransaction(tx);
         await fetchData(true);
         return { success: true, message: 'تراکنش با موفقیت ثبت شد.', id: tx.id };
+    };
+
+    const updateDepositTransaction = async (updatedTx: DepositTransaction) => {
+        const oldTx = state.depositTransactions.find(t => t.id === updatedTx.id);
+        if (!oldTx) return { success: false, message: 'تراکنش یافت نشد.' };
+
+        const holder = state.depositHolders.find(h => h.id === updatedTx.holderId);
+        if (!holder) return { success: false, message: 'امانت‌دار یافت نشد.' };
+
+        // 1. Reverse old transaction effect on holder balance
+        const oldConfig = state.storeSettings.currencyConfigs[oldTx.currency as 'AFN'|'USD'|'IRT'];
+        const oldRate = oldTx.exchangeRate || 1;
+        const oldBaseAmount = oldTx.currency === state.storeSettings.baseCurrency ? oldTx.amount : (oldConfig.method === 'multiply' ? oldTx.amount / oldRate : oldTx.amount * oldRate);
+        
+        let tempH = { ...holder };
+        const oldFactor = oldTx.type === 'deposit' ? -1 : 1;
+        if (oldTx.currency === 'USD') tempH.balanceUSD += oldFactor * oldTx.amount;
+        else if (oldTx.currency === 'IRT') tempH.balanceIRT += oldFactor * oldTx.amount;
+        else tempH.balanceAFN += oldFactor * oldTx.amount;
+        tempH.balance = (tempH.balance !== undefined ? tempH.balance : 0) + (oldFactor * oldBaseAmount);
+
+        // 2. Apply new transaction effect on holder balance
+        const newConfig = state.storeSettings.currencyConfigs[updatedTx.currency as 'AFN'|'USD'|'IRT'];
+        const newRate = updatedTx.exchangeRate || 1;
+        const newBaseAmount = updatedTx.currency === state.storeSettings.baseCurrency ? updatedTx.amount : (newConfig.method === 'multiply' ? updatedTx.amount / newRate : updatedTx.amount * newRate);
+        
+        const newFactor = updatedTx.type === 'deposit' ? 1 : -1;
+        if (updatedTx.currency === 'USD') tempH.balanceUSD += newFactor * updatedTx.amount;
+        else if (updatedTx.currency === 'IRT') tempH.balanceIRT += newFactor * updatedTx.amount;
+        else tempH.balanceAFN += newFactor * updatedTx.amount;
+        tempH.balance = (tempH.balance !== undefined ? tempH.balance : 0) + (newFactor * newBaseAmount);
+
+        await api.updateDepositHolder(tempH);
+        await api.addDepositTransaction(updatedTx); // Using addDepositTransaction as it's likely a putItem (upsert)
+        await fetchData(true);
+        return { success: true, message: 'تراکنش با موفقیت بروزرسانی شد.' };
     };
 
     const deleteDepositTransaction = async (id: string) => {
@@ -2368,7 +2408,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         updateSettings, addService, deleteService, addCompany, updateCompany, deleteCompany, addSupplier, updateSupplier, deleteSupplier, addSupplierPayment, updateSupplierTransaction, deleteSupplierTransaction, addCustomer, updateCustomer, deleteCustomer, addCustomerPayment, updateCustomerTransaction, deleteCustomerTransaction,
         addEmployee, updateEmployee, deleteEmployee, toggleEmployeeActive, addEmployeeAdvance, addEmployeeAdvanceToEmployee, processAndPaySalaries, addExpense, updateExpense, deleteExpense, setInvoiceTransientCustomer,
         addPartner, updatePartner, deletePartner, recordPartnerWithdrawal, updatePartnerWithdrawal, deletePartnerWithdrawal,
-        addDepositHolder, deleteDepositHolder, processDepositTransaction, deleteDepositTransaction
+        addDepositHolder, deleteDepositHolder, processDepositTransaction, updateDepositTransaction, deleteDepositTransaction
     }}>{children}</AppContext.Provider>;
 };
 

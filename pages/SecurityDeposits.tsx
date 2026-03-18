@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { useAppContext } from '../AppContext';
 import type { DepositHolder, DepositTransaction } from '../types';
-import { PlusIcon, XIcon, EyeIcon, TrashIcon, SafeIcon, SearchIcon, CheckIcon } from '../components/icons';
+import { PlusIcon, XIcon, EyeIcon, TrashIcon, SafeIcon, SearchIcon, CheckIcon, EditIcon } from '../components/icons';
 import Toast from '../components/Toast';
 import DepositHistoryModal from '../components/DepositHistoryModal';
+import JalaliDateInput from '../components/JalaliDateInput';
 import { toEnglishDigits } from '../utils/formatters';
 
 const Modal: React.FC<{ title: string, onClose: () => void, children: React.ReactNode }> = ({ title, onClose, children }) => (
@@ -19,7 +20,7 @@ const Modal: React.FC<{ title: string, onClose: () => void, children: React.Reac
 );
 
 const SecurityDeposits: React.FC = () => {
-    const { depositHolders, depositTransactions, addDepositHolder, deleteDepositHolder, processDepositTransaction, hasPermission, storeSettings } = useAppContext();
+    const { depositHolders, depositTransactions, addDepositHolder, deleteDepositHolder, processDepositTransaction, updateDepositTransaction, hasPermission, storeSettings } = useAppContext();
     
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
@@ -30,6 +31,10 @@ const SecurityDeposits: React.FC = () => {
     const [selectedCurrency, setSelectedCurrency] = useState<'AFN' | 'USD' | 'IRT'>('AFN');
     const [transactionAmount, setTransactionAmount] = useState<string>('');
     const [exchangeRate, setExchangeRate] = useState<string>('1');
+    const [transactionDate, setTransactionDate] = useState<string>(new Date().toISOString().split('T')[0]);
+    const [isHistorical, setIsHistorical] = useState(false);
+    const [transactionDescription, setTransactionDescription] = useState('');
+    const [editingTransaction, setEditingTransaction] = useState<DepositTransaction | null>(null);
     const [historyModalHolder, setHistoryModalHolder] = useState<DepositHolder | null>(null);
     const [toast, setToast] = useState('');
 
@@ -40,7 +45,27 @@ const SecurityDeposits: React.FC = () => {
         setTransactionType(type);
         setTransactionAmount('');
         setExchangeRate('1');
+        setTransactionDate(new Date().toISOString().split('T')[0]);
+        setIsHistorical(false);
+        setTransactionDescription('');
+        setEditingTransaction(null);
         setSelectedCurrency(storeSettings.baseCurrency as any);
+        setIsTransactionModalOpen(true);
+    };
+
+    const handleOpenEditModal = (tx: DepositTransaction) => {
+        const holder = depositHolders.find(h => h.id === tx.holderId);
+        if (!holder) return;
+        
+        setSelectedHolder(holder);
+        setEditingTransaction(tx);
+        setTransactionType(tx.type);
+        setTransactionAmount(tx.amount.toString());
+        setExchangeRate(tx.exchangeRate?.toString() || '1');
+        setTransactionDate(tx.date.split('T')[0]);
+        setIsHistorical(!!tx.isHistorical);
+        setTransactionDescription(tx.description);
+        setSelectedCurrency(tx.currency as any);
         setIsTransactionModalOpen(true);
     };
 
@@ -67,23 +92,52 @@ const SecurityDeposits: React.FC = () => {
         e.preventDefault();
         if (!selectedHolder || isProcessing) return;
         
-        const formData = new FormData(e.currentTarget);
-        const amount = Number(toEnglishDigits(formData.get('amount') as string).replace(/[^0-9.]/g, ''));
-        const currency = formData.get('currency') as 'AFN' | 'USD' | 'IRT';
-        const rate = Number(toEnglishDigits(formData.get('exchangeRate') as string || '1').replace(/[^0-9.]/g, '')) || 1;
-        const description = formData.get('description') as string;
+        const amount = Number(toEnglishDigits(transactionAmount).replace(/[^0-9.]/g, ''));
+        const rate = Number(toEnglishDigits(exchangeRate || '1').replace(/[^0-9.]/g, '')) || 1;
+        const description = transactionDescription;
 
         if (!amount || amount <= 0) return showToast("⚠️ مبلغ معتبر وارد کنید.");
         if (transactionType === 'withdrawal' && !description.trim()) return showToast("⚠️ ثبت توضیحات برای برداشت الزامی است.");
 
         setIsProcessing(true);
         try {
-            const res = await processDepositTransaction(selectedHolder.id, transactionType, amount, currency, description, rate);
-            if (res.success) {
-                setIsTransactionModalOpen(false);
-                showToast(`✅ ${transactionType === 'deposit' ? 'واریز' : 'برداشت'} مبلغ ${amount.toLocaleString()} ${currency} با موفقیت ثبت شد.`);
+            if (editingTransaction) {
+                const updatedTx: DepositTransaction = {
+                    ...editingTransaction,
+                    type: transactionType,
+                    amount,
+                    currency: selectedCurrency,
+                    exchangeRate: rate,
+                    description,
+                    date: new Date(transactionDate).toISOString(),
+                    isHistorical
+                };
+                const res = await updateDepositTransaction(updatedTx);
+                if (res.success) {
+                    setIsTransactionModalOpen(false);
+                    showToast(`✅ تراکنش با موفقیت بروزرسانی شد.`);
+                } else {
+                    showToast(`❌ ${res.message}`);
+                }
             } else {
-                showToast(`❌ ${res.message}`);
+                const res = await processDepositTransaction(
+                    selectedHolder.id, 
+                    transactionType, 
+                    amount, 
+                    selectedCurrency, 
+                    description, 
+                    rate, 
+                    true, 
+                    transactionDate, 
+                    isHistorical,
+                    true // isManual
+                );
+                if (res.success) {
+                    setIsTransactionModalOpen(false);
+                    showToast(`✅ ${transactionType === 'deposit' ? 'واریز' : 'برداشت'} مبلغ ${amount.toLocaleString()} ${selectedCurrency} با موفقیت ثبت شد.`);
+                } else {
+                    showToast(`❌ ${res.message}`);
+                }
             }
         } catch (error) {
             showToast("❌ خطای غیرمنتظره در ثبت تراکنش.");
@@ -279,86 +333,106 @@ const SecurityDeposits: React.FC = () => {
             )}
 
             {isTransactionModalOpen && selectedHolder && (
-                <Modal title={`${transactionType === 'deposit' ? 'واریز وجه به امانت' : 'برداشت از امانت'}: ${selectedHolder.name}`} onClose={() => setIsTransactionModalOpen(false)}>
-                    <form onSubmit={handleTransaction} className="space-y-5">
-                        <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex justify-between items-center">
-                            <span className="text-xs font-black text-indigo-800">واحد ارز:</span>
-                            <div className="flex gap-2">
-                                {['AFN', 'USD', 'IRT'].map(c => (
-                                    <label key={c} className="cursor-pointer group">
+                <Modal title={editingTransaction ? `ویرایش تراکنش: ${selectedHolder.name}` : `${transactionType === 'deposit' ? 'ثبت دریافت وجه / رسید از' : 'ثبت پرداخت وجه / برد به'}: ${selectedHolder.name}`} onClose={() => setIsTransactionModalOpen(false)}>
+                    <form onSubmit={handleTransaction} className="space-y-4">
+                        <div className="flex gap-4 p-3 bg-blue-50 rounded-xl">
+                            {['AFN', 'USD', 'IRT'].map(c => {
+                                const label = storeSettings.currencyConfigs[c as 'AFN'|'USD'|'IRT'].name;
+                                const color = c === 'USD' ? 'text-green-600' : (c === 'IRT' ? 'text-orange-600' : 'text-blue-600');
+                                return (
+                                    <label key={c} className="flex items-center gap-2 cursor-pointer">
                                         <input 
                                             type="radio" 
-                                            name="currency" 
-                                            value={c} 
                                             checked={selectedCurrency === c} 
-                                            onChange={() => setSelectedCurrency(c as any)}
-                                            className="hidden peer" 
-                                            disabled={isProcessing} 
+                                            onChange={() => {setSelectedCurrency(c as any); setExchangeRate('1');}} 
+                                            className={color} 
+                                            disabled={isProcessing}
                                         />
-                                        <div className="px-4 py-2 bg-white border border-indigo-200 rounded-xl text-xs font-black text-indigo-400 peer-checked:bg-indigo-600 peer-checked:text-white peer-checked:border-indigo-600 transition-all">{storeSettings.currencyConfigs[c as 'AFN'|'USD'|'IRT']?.name || c}</div>
+                                        <span className={`text-xs font-bold ${color}`}>{label}</span>
                                     </label>
-                                ))}
-                            </div>
+                                );
+                            })}
                         </div>
+
                         {selectedCurrency !== storeSettings.baseCurrency && (
-                            <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                                <label className="block text-xs font-black text-blue-800 mb-2">نرخ تبدیل به {storeSettings.baseCurrency}</label>
+                            <div className="flex items-center gap-3">
+                                <span className="text-xs whitespace-nowrap font-bold text-slate-400">نرخ تبدیل ({storeSettings.currencyConfigs[storeSettings.baseCurrency].name} به {selectedCurrency}):</span>
                                 <input 
                                     name="exchangeRate" 
                                     type="text" 
                                     inputMode="decimal" 
                                     value={exchangeRate}
                                     onChange={(e:any) => setExchangeRate(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} 
-                                    className="w-full p-3 border-2 border-white rounded-xl focus:border-blue-500 outline-none font-black text-lg text-center text-blue-800" 
-                                    placeholder="1.0" 
+                                    className="w-full p-2.5 border border-slate-200 rounded-xl font-mono text-center" 
+                                    placeholder="نرخ" 
                                     required 
                                     disabled={isProcessing} 
                                 />
                             </div>
                         )}
-                        <div>
-                            <label className="block text-sm font-bold text-indigo-900 mb-2">مبلغ تراکنش</label>
+
+                        <div className="flex items-center gap-3">
+                            <span className="text-xs whitespace-nowrap font-bold text-slate-400">تاریخ تراکنش:</span>
+                            <JalaliDateInput value={transactionDate} onChange={setTransactionDate} disableRestriction />
+                            <input type="hidden" name="transactionDate" value={transactionDate} />
+                        </div>
+
+                        <div className="relative">
                             <input 
                                 name="amount" 
                                 type="text" 
                                 inputMode="decimal" 
                                 value={transactionAmount}
                                 onChange={(e:any) => setTransactionAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} 
-                                className="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 outline-none font-black text-2xl text-center text-indigo-800" 
-                                placeholder="0" 
+                                className={`w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 ${transactionType === 'deposit' ? 'focus:ring-emerald-50' : 'focus:ring-red-50'} font-black text-xl text-center`} 
+                                placeholder={`${transactionType === 'deposit' ? 'مبلغ دریافتی / رسید' : 'مبلغ پرداختی / برد'} (${selectedCurrency})`}
                                 required 
                                 disabled={isProcessing} 
                             />
                             {selectedCurrency !== storeSettings.baseCurrency && transactionAmount && !isNaN(Number(transactionAmount)) && !isNaN(Number(exchangeRate)) && Number(exchangeRate) > 0 && (
-                                <div className="mt-2 p-3 bg-slate-50 rounded-xl border border-slate-100 flex justify-between items-center">
-                                    <span className="text-xs font-bold text-slate-500">معادل به {storeSettings.baseCurrency}:</span>
-                                    <span className="font-black text-indigo-600" dir="ltr">
-                                        {(() => {
-                                            const amount = Number(transactionAmount);
-                                            const rate = Number(exchangeRate);
-                                            const config = storeSettings.currencyConfigs[selectedCurrency];
-                                            const baseAmount = config.method === 'multiply' ? amount / rate : amount * rate;
-                                            
-                                            return new Intl.NumberFormat('en-US', {
-                                                minimumFractionDigits: 0,
-                                                maximumFractionDigits: 2
-                                            }).format(baseAmount);
-                                        })()} {storeSettings.baseCurrency}
-                                    </span>
-                                </div>
+                                <p className={`text-[10px] font-black mt-1 ${transactionType === 'deposit' ? 'text-emerald-600' : 'text-red-600'} text-left`}>
+                                    {transactionType === 'deposit' ? 'معادل دریافتی / رسید' : 'معادل پرداختی / برد'}: {(() => {
+                                        const amount = Number(transactionAmount);
+                                        const rate = Number(exchangeRate);
+                                        const config = storeSettings.currencyConfigs[selectedCurrency];
+                                        const baseAmount = config.method === 'multiply' ? amount / rate : amount * rate;
+                                        return baseAmount < 1 ? baseAmount.toFixed(4) : baseAmount.toLocaleString(undefined, { maximumFractionDigits: 2 });
+                                    })()} {storeSettings.currencyConfigs[storeSettings.baseCurrency].name}
+                                </p>
                             )}
                         </div>
-                        <div>
-                            <label className="block text-sm font-bold text-indigo-900 mb-2">شرح تراکنش (بابتِ...)</label>
-                            <textarea name="description" className="w-full p-4 border-2 border-slate-100 rounded-2xl focus:border-indigo-500 outline-none min-h-[100px] text-sm" placeholder={transactionType === 'withdrawal' ? "علت برداشت (الزامی)" : "توضیحات اختیاری..."} required={transactionType === 'withdrawal'} disabled={isProcessing}></textarea>
+
+                        <input 
+                            name="description" 
+                            value={transactionDescription}
+                            onChange={(e) => setTransactionDescription(e.target.value)}
+                            className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-indigo-50" 
+                            placeholder={transactionType === 'withdrawal' ? "علت برداشت (الزامی)" : "بابت... (اختیاری)"} 
+                            required={transactionType === 'withdrawal'} 
+                            disabled={isProcessing}
+                        />
+
+                        <div className="flex items-center gap-2 p-3 bg-amber-50 rounded-xl border border-amber-100">
+                            <input 
+                                type="checkbox" 
+                                id="isHistoricalDeposit" 
+                                checked={isHistorical} 
+                                onChange={(e) => setIsHistorical(e.target.checked)}
+                                className="w-5 h-5 text-amber-600 rounded"
+                                disabled={isProcessing}
+                            />
+                            <label htmlFor="isHistoricalDeposit" className="text-sm font-bold text-amber-800 cursor-pointer">
+                                ثبت به عنوان داده‌های تاریخی (بدون تأثیر بر صندوق)
+                            </label>
                         </div>
+
                         <button 
                             type="submit" 
                             disabled={isProcessing}
-                            className={`w-full py-4 rounded-2xl font-black text-lg shadow-xl active:scale-95 transition-all mt-4 text-white flex items-center justify-center gap-2 ${transactionType === 'deposit' ? 'bg-emerald-600 shadow-emerald-100 disabled:bg-emerald-300' : 'bg-orange-600 shadow-orange-100 disabled:bg-orange-300'}`}
+                            className={`w-full py-4 rounded-xl font-black text-lg shadow-xl active:scale-[0.98] transition-all mt-4 text-white flex items-center justify-center gap-2 ${transactionType === 'deposit' ? 'bg-emerald-600 shadow-emerald-100 disabled:bg-emerald-300' : 'bg-red-600 shadow-red-100 disabled:bg-red-300'}`}
                         >
                             {isProcessing && <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>}
-                            {isProcessing ? 'در حال ثبت...' : (transactionType === 'deposit' ? 'ثبت واریز امانت' : 'تأیید برداشت از امانت')}
+                            {isProcessing ? 'در حال ثبت...' : (editingTransaction ? 'بروزرسانی تراکنش' : (transactionType === 'deposit' ? 'ثبت نهایی و چاپ رسید' : 'تأیید و ثبت نهایی برداشت'))}
                         </button>
                     </form>
                 </Modal>
@@ -369,6 +443,7 @@ const SecurityDeposits: React.FC = () => {
                     holder={historyModalHolder} 
                     transactions={depositTransactions.filter(t => t.holderId === historyModalHolder.id)}
                     onClose={() => setHistoryModalHolder(null)}
+                    onEdit={handleOpenEditModal}
                 />
             )}
         </div>

@@ -161,6 +161,8 @@ export interface DepositTransaction {
     date: string;
     exchangeRate?: number; // Rate to base currency at time of transaction
     isCash?: boolean; // NEW: To distinguish physical cash from intermediary settlements
+    isHistorical?: boolean; // NEW: To record past transactions without affecting current cash
+    isManual?: boolean; // NEW: To distinguish direct entries from system-generated ones
 }
 
 // --- Accounting Module Types ---
