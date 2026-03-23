@@ -59,7 +59,7 @@ const AppContent: React.FC = () => {
       accounting: 'حسابداری',
       deposits: 'امانات',
       reports: 'گزارشات',
-      special_reports: 'گزارشات تخصصی',
+      special_reports: 'دانلود گزارشات',
       settings: 'تنظیمات',
       orders: 'سفارشات',
   };
