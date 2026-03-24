@@ -56,7 +56,7 @@ interface AppContextType extends AppState {
     updateCartItemQuantity: (itemId: string, itemType: 'product' | 'service', newQuantity: number) => { success: boolean; message: string };
     updateCartItemFinalPrice: (itemId: string, itemType: 'product' | 'service', finalPrice: number) => void;
     removeFromCart: (itemId: string, itemType: 'product' | 'service') => void;
-    completeSale: (cashier: string, customerId?: string, currency?: 'AFN'|'USD'|'IRT', exchangeRate?: number, supplierIntermediaryId?: string) => Promise<{ success: boolean; invoice?: SaleInvoice; message: string }>;
+    completeSale: (cashier: string, customerId?: string, currency?: 'AFN'|'USD'|'IRT', exchangeRate?: number, supplierIntermediaryId?: string, enableActivity?: boolean) => Promise<{ success: boolean; invoice?: SaleInvoice; message: string }>;
     beginEditSale: (invoiceId: string) => { success: boolean; message: string; customerId?: string; supplierIntermediaryId?: string; };
     cancelEditSale: () => void;
     deleteSaleInvoice: (invoiceId: string) => Promise<{ success: boolean; message: string }>;
@@ -897,7 +897,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     // --- Standardized POS Logic: Sales with FIFO Stock Updates and Atomic Replacement ---
-    const completeSale = async (cashier: string, customerId?: string, currency: 'AFN'|'USD'|'IRT' = 'AFN', exchangeRate: number = 1, supplierIntermediaryId?: string): Promise<{ success: boolean; invoice?: SaleInvoice; message: string }> => {
+    const completeSale = async (cashier: string, customerId?: string, currency: 'AFN'|'USD'|'IRT' = 'AFN', exchangeRate: number = 1, supplierIntermediaryId?: string, enableActivity: boolean = true): Promise<{ success: boolean; invoice?: SaleInvoice; message: string }> => {
         const { cart, products, editingSaleInvoiceId, saleInvoices, customers, suppliers } = state;
         if (cart.length === 0) return { success: false, message: "سبد خالی است!" };
 
@@ -1060,7 +1060,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
         try {
             // --- Activity Feature Logic ---
-            if (customerId) {
+            if (customerId && enableActivity) {
                 const customer = state.customers.find(c => c.id === customerId);
                 if (customer?.activityConfig) {
                     const { depositHolderId, companyShares } = customer.activityConfig;

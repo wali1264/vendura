@@ -41,6 +41,8 @@ const DEFAULT_SETTINGS: StoreSettings = {
     packageLabel: 'بسته',
     unitLabel: 'عدد',
     baseCurrency: 'AFN',
+    logoLeft: '',
+    logoRight: '',
     currencyConfigs: {
         AFN: { code: 'AFN', name: 'افغانی', symbol: 'AFN', method: 'multiply' },
         USD: { code: 'USD', name: 'دلار', symbol: '$', method: 'divide' },

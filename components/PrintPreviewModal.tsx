@@ -127,10 +127,22 @@ const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ invoice, onClose 
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white p-4 md:p-6 print:p-0 rounded-lg shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
                 <div className="printable-area text-gray-900 flex-grow flex flex-col min-h-0">
-                    <div className="text-center mb-2 pb-2 print:mb-6 print:pb-4 border-b">
+                    <div className="text-center mb-2 pb-2 print:mb-6 print:pb-4 border-b relative">
+                        {/* Logos for print */}
+                        {storeSettings.logoRight && (
+                            <div className="hidden print:block absolute right-0 top-0 h-16 w-16 md:h-20 md:w-20">
+                                <img src={storeSettings.logoRight} alt="Logo Right" className="h-full w-full object-contain" referrerPolicy="no-referrer" />
+                            </div>
+                        )}
+                        {storeSettings.logoLeft && (
+                            <div className="hidden print:block absolute left-0 top-0 h-16 w-16 md:h-20 md:w-20">
+                                <img src={storeSettings.logoLeft} alt="Logo Left" className="h-full w-full object-contain" referrerPolicy="no-referrer" />
+                            </div>
+                        )}
+
                         <h1 className="text-xl print:text-3xl font-extrabold text-blue-600">{storeSettings.storeName}</h1>
-                        <p className="text-xs print:text-sm text-slate-500">{storeSettings.address}</p>
-                        <p className="text-xs print:text-sm text-slate-500">تلفن: {storeSettings.phone}</p>
+                        <p className="text-xs print:hidden text-slate-500">{storeSettings.address}</p>
+                        <p className="text-xs print:hidden text-slate-500">تلفن: {storeSettings.phone}</p>
                         <p className="text-sm print:text-lg text-slate-800 mt-1 print:mt-2 font-bold bg-slate-100 inline-block px-4 py-1 rounded-full border">فاکتور فروش</p>
                     </div>
                     
@@ -234,6 +246,12 @@ const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ invoice, onClose 
                                 مبلغ به حروف: {numberToPersianWords(invoice.totalAmount)} {currencySuffix}
                             </div>
                         </div>
+                    </div>
+
+                    {/* Footer for print only */}
+                    <div className="hidden print:block mt-auto pt-4 border-t border-slate-300 text-center">
+                        <p className="text-[10px] font-bold text-slate-800">{storeSettings.address}</p>
+                        <p className="text-[10px] font-bold text-slate-800">تلفن: {storeSettings.phone}</p>
                     </div>
                 </div>
                 <div className="flex justify-between items-center mt-4 print:hidden pt-2 border-t no-print">

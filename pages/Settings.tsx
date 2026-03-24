@@ -22,6 +22,17 @@ const StoreDetailsTab: React.FC<TabProps> = ({ showToast }) => {
         setFormData({ ...formData, [e.target.name]: value });
     };
 
+    const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>, side: 'logoLeft' | 'logoRight') => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setFormData({ ...formData, [side]: reader.result as string });
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         updateSettings(formData);
@@ -47,6 +58,51 @@ const StoreDetailsTab: React.FC<TabProps> = ({ showToast }) => {
                 <div>
                     <label htmlFor="currencyName" className="block text-sm md:text-md font-bold text-slate-700 mb-2">نام واحد پولی</label>
                     <input id="currencyName" name="currencyName" value={formData.currencyName} onChange={handleChange} className="w-full p-3.5 border border-slate-200 rounded-xl focus:ring-4 focus:ring-blue-50 outline-none transition-all" placeholder="مثال: افغانی" />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
+                    <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">لوگوی سمت راست (بالای فاکتور)</label>
+                        <div className="flex items-center gap-4">
+                            <label className="flex-grow flex flex-col items-center justify-center h-32 border-2 border-dashed border-slate-200 rounded-2xl hover:border-blue-400 hover:bg-blue-50 transition-all cursor-pointer overflow-hidden">
+                                {formData.logoRight ? (
+                                    <img src={formData.logoRight} alt="Logo Right" className="h-full w-full object-contain" />
+                                ) : (
+                                    <div className="flex flex-col items-center text-slate-400">
+                                        <UploadIcon className="w-8 h-8 mb-2" />
+                                        <span className="text-xs font-bold">انتخاب لوگو</span>
+                                    </div>
+                                )}
+                                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleLogoUpload(e, 'logoRight')} />
+                            </label>
+                            {formData.logoRight && (
+                                <button type="button" onClick={() => setFormData({ ...formData, logoRight: '' })} className="p-2 text-red-500 hover:bg-red-50 rounded-lg" title="حذف لوگو">
+                                    <TrashIcon className="w-5 h-5" />
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">لوگوی سمت چپ (بالای فاکتور)</label>
+                        <div className="flex items-center gap-4">
+                            <label className="flex-grow flex flex-col items-center justify-center h-32 border-2 border-dashed border-slate-200 rounded-2xl hover:border-blue-400 hover:bg-blue-50 transition-all cursor-pointer overflow-hidden">
+                                {formData.logoLeft ? (
+                                    <img src={formData.logoLeft} alt="Logo Left" className="h-full w-full object-contain" />
+                                ) : (
+                                    <div className="flex flex-col items-center text-slate-400">
+                                        <UploadIcon className="w-8 h-8 mb-2" />
+                                        <span className="text-xs font-bold">انتخاب لوگو</span>
+                                    </div>
+                                )}
+                                <input type="file" accept="image/*" className="hidden" onChange={(e) => handleLogoUpload(e, 'logoLeft')} />
+                            </label>
+                            {formData.logoLeft && (
+                                <button type="button" onClick={() => setFormData({ ...formData, logoLeft: '' })} className="p-2 text-red-500 hover:bg-red-50 rounded-lg" title="حذف لوگو">
+                                    <TrashIcon className="w-5 h-5" />
+                                </button>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </div>
             <div className="flex justify-end pt-4">

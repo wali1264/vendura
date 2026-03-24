@@ -217,7 +217,7 @@ const CartSide: React.FC<any> = ({
     isSupplierMenuOpen, setIsSupplierMenuOpen, totalAmount, completeSale, setInvoiceDateRange,
     handlePrintInvoice, handleEditInvoice, storeSettings, setMobileView, addToCart, handleOpenReturnModal,
     isProcessing, currency, setCurrency, exchangeRate, setExchangeRate, saleInvoices,
-    deleteSaleInvoice, setInvoiceToDelete
+    deleteSaleInvoice, setInvoiceToDelete, enableActivity, setEnableActivity
 }) => {
     
     const rateNum = Number(exchangeRate) || 1;
@@ -248,7 +248,7 @@ const CartSide: React.FC<any> = ({
                     {activeTab === 'services' && <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-600 rounded-t-full"></div>}
                 </button>
             </div>
-             <button onClick={() => setIsGalleryOpen(true)} className="flex-shrink-0 ml-1 p-2 rounded-full text-gray-500 hover:text-blue-600 hover:bg-gray-100 transition-colors" title="گالری">
+             <button onClick={() => setIsGalleryOpen(true)} className="flex-shrink-0 ml-1 p-2 rounded-full text-gray-500 hover:text-blue-600 hover:bg-gray-100 transition-colors relative" title="گالری">
                 <GalleryIcon className="w-6 h-6" />
                 {memoImages.length > 0 && (
                     <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold rounded-full h-4 w-4 flex items-center justify-center">
@@ -256,6 +256,19 @@ const CartSide: React.FC<any> = ({
                     </span>
                 )}
             </button>
+
+            {/* Activity Toggle Checkbox */}
+            <div className={`flex items-center ml-1 ${!selectedCustomer?.activityConfig ? 'opacity-20' : ''}`}>
+                <input 
+                    type="checkbox" 
+                    id="activity-toggle"
+                    checked={enableActivity}
+                    onChange={(e) => setEnableActivity(e.target.checked)}
+                    disabled={!selectedCustomer?.activityConfig}
+                    className={`w-3 h-3 rounded border-gray-300 text-blue-600 focus:ring-blue-500 transition-all ${!selectedCustomer?.activityConfig ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                    title={selectedCustomer?.activityConfig ? "فعال‌سازی ثبت در اکتیویتی" : "این مشتری حساب اکتیویتی ندارد"}
+                />
+            </div>
 
             {/* Supplier Intermediary Selection */}
             <div className="relative ml-1">
@@ -587,6 +600,14 @@ const POS: React.FC = () => {
     const [isMobileCustomerMenuOpen, setIsMobileCustomerMenuOpen] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null);
+    const [enableActivity, setEnableActivity] = useState(false);
+
+    useEffect(() => {
+        const customer = customers.find(c => c.id === selectedCustomerId);
+        if (!customer?.activityConfig) {
+            setEnableActivity(false);
+        }
+    }, [selectedCustomerId, customers]);
     const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
 
     // Multi-currency POS State
@@ -793,7 +814,8 @@ const POS: React.FC = () => {
                 selectedCustomerId || undefined, 
                 currency, 
                 currency === baseCurrency ? 1 : Number(exchangeRate),
-                selectedSupplierId || undefined
+                selectedSupplierId || undefined,
+                enableActivity
             );
             
             showToast(result.message);
@@ -997,7 +1019,8 @@ const POS: React.FC = () => {
                           totalAmount: totalAmountBase, completeSale, setInvoiceDateRange,
                           handlePrintInvoice, handleEditInvoice, storeSettings, setMobileView, addToCart, handleOpenReturnModal,
                           isProcessing, currency, setCurrency, exchangeRate, setExchangeRate,
-                          saleInvoices, deleteSaleInvoice, setInvoiceToDelete
+                          saleInvoices, deleteSaleInvoice, setInvoiceToDelete,
+                          enableActivity, setEnableActivity
                         }}
                      />
                 </div>

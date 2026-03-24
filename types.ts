@@ -316,6 +316,8 @@ export interface StoreSettings {
     packageLabel?: string;
     unitLabel?: string;
     baseCurrency: 'AFN' | 'USD' | 'IRT';
+    logoLeft?: string;
+    logoRight?: string;
     currencyConfigs: {
         AFN: CurrencyConfig;
         USD: CurrencyConfig;
