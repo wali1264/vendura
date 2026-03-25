@@ -693,7 +693,7 @@ const PayrollTab = () => {
 };
 
 const CustomersTab = () => {
-    const { customers, depositHolders, companies, addCustomer, updateCustomer, deleteCustomer, addCustomerPayment, customerTransactions, storeSettings } = useAppContext();
+    const { customers, depositHolders, companies, addCustomer, updateCustomer, deleteCustomer, addCustomerPayment, customerTransactions, storeSettings, saleInvoices } = useAppContext();
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isPayModalOpen, setIsPayModalOpen] = useState(false);
     const [transactionType, setTransactionType] = useState<'payment' | 'receipt'>('payment');
@@ -705,6 +705,7 @@ const CustomersTab = () => {
 
     const [isActivitySettingsModalOpen, setIsActivitySettingsModalOpen] = useState(false);
     const [activitySettingsCustomer, setActivitySettingsCustomer] = useState<Customer | null>(null);
+    const [selectedInvoiceId, setSelectedInvoiceId] = useState<string>('');
     const [clickCount, setClickCount] = useState<{ [id: string]: number }>({});
     const [lastClickTime, setLastClickTime] = useState<{ [id: string]: number }>({});
 
@@ -739,6 +740,15 @@ const CustomersTab = () => {
     const designatedPersonIds = useMemo(() => {
         return customers.map(c => c.activityConfig?.depositHolderId).filter(Boolean) as string[];
     }, [customers]);
+
+    const customerInvoices = useMemo(() => {
+        if (!selectedCustomer) return [];
+        return (saleInvoices || []).filter(inv => 
+            inv.customerId === selectedCustomer.id && 
+            inv.type === 'sale' && 
+            (inv.totalAmount - (inv.receivedAmount || 0)) > 0
+        );
+    }, [saleInvoices, selectedCustomer]);
 
     const baseCurrency = storeSettings.baseCurrency || 'AFN';
     const baseCurrencyName = storeSettings.currencyConfigs[baseCurrency]?.name || 'AFN';
@@ -842,6 +852,7 @@ const CustomersTab = () => {
         setTransactionDate(new Date().toISOString().split('T')[0]);
         setIsHistorical(false);
         setSelectedTrusteeId('');
+        setSelectedInvoiceId('');
         setIsPayModalOpen(true);
     };
 
@@ -873,7 +884,8 @@ const CustomersTab = () => {
             selectedTrusteeId || undefined,
             transactionType,
             customDate,
-            isHistorical
+            isHistorical,
+            selectedInvoiceId || undefined
         );
         
         if (newTransaction) {
@@ -881,6 +893,7 @@ const CustomersTab = () => {
             setReceiptModalData({ person: selectedCustomer, transaction: newTransaction });
             setSelectedCustomer(null);
             setSelectedTrusteeId('');
+            setSelectedInvoiceId('');
         }
     };
 
@@ -1177,6 +1190,31 @@ const CustomersTab = () => {
                             <JalaliDateInput value={transactionDate} onChange={setTransactionDate} disableRestriction />
                             <input type="hidden" name="transactionDate" value={transactionDate} />
                         </div>
+
+                        {transactionType === 'payment' && customerInvoices.length > 0 && (
+                            <div className="space-y-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">اتصال به فاکتور (اختیاری):</label>
+                                <select 
+                                    value={selectedInvoiceId} 
+                                    onChange={(e) => setSelectedInvoiceId(e.target.value)}
+                                    className="w-full p-3 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-indigo-50 bg-white"
+                                >
+                                    <option value="">عدم اتصال به فاکتور خاص</option>
+                                    {customerInvoices.map(inv => {
+                                        const remaining = inv.totalAmount - (inv.receivedAmount || 0);
+                                        return (
+                                            <option key={inv.id} value={inv.id}>
+                                                فاکتور #{inv.invoiceNumber} - باقی‌مانده: {remaining.toLocaleString()} {storeSettings.currencyConfigs[inv.currency].name}
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                                {selectedInvoiceId && (
+                                    <p className="text-[9px] text-indigo-600 font-bold">مبلغ پرداختی از باقی‌مانده این فاکتور کسر خواهد شد.</p>
+                                )}
+                            </div>
+                        )}
+
                         <input name="amount" type="text" inputMode="decimal" value={paymentAmount} onChange={e => setPaymentAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} placeholder={`${transactionType === 'payment' ? 'مبلغ دریافتی / رسید' : 'مبلغ پرداختی / برد'} (${paymentCurrency})`} className={`w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 ${transactionType === 'payment' ? 'focus:ring-emerald-50' : 'focus:ring-red-50'} font-black text-xl text-center`} required />
                         {paymentCurrency !== baseCurrency && convertedPayment > 0 && (
                             <p className={`text-[10px] font-black ${transactionType === 'payment' ? 'text-emerald-600' : 'text-red-600'} text-left`}>{transactionType === 'payment' ? 'معادل دریافتی / رسید' : 'معادل پرداختی / برد'}: {convertedPayment < 1 ? convertedPayment.toFixed(4) : convertedPayment.toLocaleString(undefined, { maximumFractionDigits: 2 })} {baseCurrencyName}</p>

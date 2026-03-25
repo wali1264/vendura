@@ -101,7 +101,7 @@ interface AppContextType extends AppState {
     addCustomer: (customer: Omit<Customer, 'id' | 'balance' | 'balanceAFN' | 'balanceUSD' | 'balanceIRT'>, initialBalance?: { amount: number, type: 'creditor' | 'debtor', currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => void;
     updateCustomer: (customer: Customer, initialBalance?: { amount: number, type: 'creditor' | 'debtor', currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => Promise<void>;
     deleteCustomer: (id: string) => void;
-    addCustomerPayment: (customerId: string, amount: number, description: string, currency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, trusteeId?: string, type?: 'payment' | 'receipt', customDate?: string, isHistorical?: boolean) => Promise<CustomerTransaction | null>;
+    addCustomerPayment: (customerId: string, amount: number, description: string, currency?: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, trusteeId?: string, type?: 'payment' | 'receipt', customDate?: string, isHistorical?: boolean, invoiceId?: string) => Promise<CustomerTransaction | null>;
     updateCustomerTransaction: (transaction: CustomerTransaction) => Promise<void>;
     deleteCustomerTransaction: (transactionId: string) => Promise<void>;
     
@@ -2108,7 +2108,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         await fetchData(true);
     };
 
-    const addCustomerPayment = async (cid: string, a: number, d: string, cur: any = 'AFN', rate: number = 1, trusteeId?: string, type: 'payment' | 'receipt' = 'payment', customDate?: string, isHistorical?: boolean) => {
+    const addCustomerPayment = async (cid: string, a: number, d: string, cur: any = 'AFN', rate: number = 1, trusteeId?: string, type: 'payment' | 'receipt' = 'payment', customDate?: string, isHistorical?: boolean, invoiceId?: string) => {
         const c = state.customers.find(x => x.id === cid);
         if (!c) return null;
         
@@ -2125,8 +2125,34 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             exchangeRate: rate,
             isCash: !trusteeId, // If trustee is involved, it's not physical cash for us
             isManual: true,
-            isHistorical: isHistorical
+            isHistorical: isHistorical,
+            invoiceId: invoiceId
         };
+        
+        if (invoiceId) {
+            const inv = state.saleInvoices.find(i => i.id === invoiceId);
+            if (inv) {
+                // Calculate how much to add to receivedAmount in invoice's currency
+                let amountToAdd = 0;
+                if (cur === inv.currency) {
+                    amountToAdd = a;
+                } else {
+                    // Convert 'a' (in 'cur') to base, then to 'inv.currency'
+                    const baseAmount = cur === state.storeSettings.baseCurrency ? a : (state.storeSettings.currencyConfigs[cur as 'AFN'|'USD'|'IRT'].method === 'multiply' ? a / rate : a * rate);
+                    const invConfig = state.storeSettings.currencyConfigs[inv.currency];
+                    amountToAdd = inv.currency === state.storeSettings.baseCurrency ? baseAmount : (invConfig.method === 'multiply' ? baseAmount * inv.exchangeRate : baseAmount / inv.exchangeRate);
+                }
+                
+                const updatedInv = { ...inv, receivedAmount: (inv.receivedAmount || 0) + amountToAdd };
+                await api.updateSaleInvoice(updatedInv);
+                
+                // Update local state
+                setState(prev => ({
+                    ...prev,
+                    saleInvoices: prev.saleInvoices.map(i => i.id === invoiceId ? updatedInv : i)
+                }));
+            }
+        }
         
         // If payment (receipt from customer): they pay us -> their debt decreases -> balance decreases
         // If receipt (payment to customer): we pay them -> their debt increases -> balance increases

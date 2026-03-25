@@ -530,6 +530,7 @@ export const api = {
             await db.putItem(db.STORES.SALE_INVOICES, { ...inv, originalInvoiceId: name });
         }
     },
+    updateSaleInvoice: async (invoice: SaleInvoice) => db.putItem(db.STORES.SALE_INVOICES, invoice),
 
     processPayment: async (entityType: 'customer' | 'supplier' | 'employee', entityId: string, newBalance: any, transaction: any, extraFields?: any) => {
         const store = entityType === 'customer' ? db.STORES.CUSTOMERS : (entityType === 'supplier' ? db.STORES.SUPPLIERS : db.STORES.EMPLOYEES);
