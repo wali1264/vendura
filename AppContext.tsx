@@ -1110,7 +1110,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             customerTxs.push({
                 id: crypto.randomUUID(),
                 customerId: customerId,
-                type: 'receipt',
+                type: 'payment',
                 amount: receivedAmount,
                 date: finalInv.timestamp,
                 description: isFullPayment ? `تسویه کامل فاکتور #${invId}` : `پیش‌پرداخت فاکتور #${invId}`,
