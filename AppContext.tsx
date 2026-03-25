@@ -2120,7 +2120,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             type: type, 
             amount: a, 
             date: customDate ? new Date(customDate).toISOString() : new Date().toISOString(), 
-            description: d + (trusteeId ? ' (تحویل به واسطه)' : ''), 
+            description: d + (invoiceId ? ` (بابت فاکتور #${invoiceId})` : '') + (trusteeId ? ' (تحویل به واسطه)' : ''), 
             currency: cur,
             exchangeRate: rate,
             isCash: !trusteeId, // If trustee is involved, it's not physical cash for us

@@ -47,6 +47,11 @@ const ReceiptPreviewModal: React.FC<ReceiptPreviewModalProps> = ({ person, trans
                         <p className="font-medium"><strong>مبلغ به عدد:</strong> <span className="font-black font-mono text-2xl mx-2 text-emerald-600" dir="ltr">{formatCurrency(transaction.amount, storeSettings, displayCurrencyName)}</span></p>
                         <p className="font-medium leading-relaxed"><strong>مبلغ به حروف:</strong> <span className="font-bold text-lg text-slate-700">{numberToPersianWords(transaction.amount)} {displayCurrencyName}</span></p>
                          <p className="font-medium italic text-slate-500"><strong>بابت:</strong> {transaction.description}</p>
+                         {(transaction as any).invoiceId && (
+                             <p className="font-bold text-blue-700 bg-blue-50 p-2 rounded-lg border border-blue-100 mt-2">
+                                 <strong>بابت تسویه فاکتور شماره:</strong> {(transaction as any).invoiceId}
+                             </p>
+                         )}
                     </div>
 
                     <div className="mt-20 flex justify-around text-center text-sm">

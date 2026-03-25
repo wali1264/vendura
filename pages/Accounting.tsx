@@ -1204,7 +1204,7 @@ const CustomersTab = () => {
                                         const remaining = inv.totalAmount - (inv.receivedAmount || 0);
                                         return (
                                             <option key={inv.id} value={inv.id}>
-                                                فاکتور #{inv.invoiceNumber} - باقی‌مانده: {remaining.toLocaleString()} {storeSettings.currencyConfigs[inv.currency].name}
+                                                فاکتور #{inv.id} - باقی‌مانده: {remaining.toLocaleString()} {storeSettings.currencyConfigs[inv.currency].name}
                                             </option>
                                         );
                                     })}
