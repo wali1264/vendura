@@ -56,7 +56,7 @@ interface AppContextType extends AppState {
     updateCartItemQuantity: (itemId: string, itemType: 'product' | 'service', newQuantity: number) => { success: boolean; message: string };
     updateCartItemFinalPrice: (itemId: string, itemType: 'product' | 'service', finalPrice: number) => void;
     removeFromCart: (itemId: string, itemType: 'product' | 'service') => void;
-    completeSale: (cashier: string, customerId?: string, currency?: 'AFN'|'USD'|'IRT', exchangeRate?: number, supplierIntermediaryId?: string, enableActivity?: boolean) => Promise<{ success: boolean; invoice?: SaleInvoice; message: string }>;
+    completeSale: (cashier: string, customerId?: string, currency?: 'AFN'|'USD'|'IRT', exchangeRate?: number, supplierIntermediaryId?: string, enableActivity?: boolean, receivedAmount?: number) => Promise<{ success: boolean; invoice?: SaleInvoice; message: string }>;
     beginEditSale: (invoiceId: string) => { success: boolean; message: string; customerId?: string; supplierIntermediaryId?: string; };
     cancelEditSale: () => void;
     deleteSaleInvoice: (invoiceId: string) => Promise<{ success: boolean; message: string }>;
@@ -897,7 +897,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     // --- Standardized POS Logic: Sales with FIFO Stock Updates and Atomic Replacement ---
-    const completeSale = async (cashier: string, customerId?: string, currency: 'AFN'|'USD'|'IRT' = 'AFN', exchangeRate: number = 1, supplierIntermediaryId?: string, enableActivity: boolean = true): Promise<{ success: boolean; invoice?: SaleInvoice; message: string }> => {
+    const completeSale = async (cashier: string, customerId?: string, currency: 'AFN'|'USD'|'IRT' = 'AFN', exchangeRate: number = 1, supplierIntermediaryId?: string, enableActivity: boolean = true, receivedAmount: number = 0): Promise<{ success: boolean; invoice?: SaleInvoice; message: string }> => {
         const { cart, products, editingSaleInvoiceId, saleInvoices, customers, suppliers } = state;
         if (cart.length === 0) return { success: false, message: "سبد خالی است!" };
 
@@ -961,6 +961,11 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             ? totalBaseAmount 
             : (config.method === 'multiply' ? totalBaseAmount * exchangeRate : totalBaseAmount / exchangeRate);
 
+        // Calculate received amount in base currency
+        const receivedAmountBase = currency === state.storeSettings.baseCurrency
+            ? receivedAmount
+            : (config.method === 'multiply' ? receivedAmount / exchangeRate : receivedAmount * exchangeRate);
+
         const invId = editingSaleInvoiceId || generateNextId('F', saleInvoices.map(i => i.id));
         
         const finalInv: SaleInvoice = { 
@@ -976,7 +981,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             customerId, 
             supplierIntermediaryId,
             currency, 
-            exchangeRate 
+            exchangeRate,
+            receivedAmount // Store the received amount
         };
 
         // 4. Atomic Balance Update
@@ -992,6 +998,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 else if (oldInv.currency === 'IRT') balIRT -= oldInv.totalAmount;
                 else balAFN -= oldInv.totalAmount;
                 balTotal -= oldInv.totalAmountAFN;
+
+                // Revert old received amount
+                if (oldInv.receivedAmount && oldInv.receivedAmount > 0) {
+                    const oldReceivedBase = oldInv.currency === state.storeSettings.baseCurrency
+                        ? oldInv.receivedAmount
+                        : (state.storeSettings.currencyConfigs[oldInv.currency].method === 'multiply' ? oldInv.receivedAmount / oldInv.exchangeRate : oldInv.receivedAmount * oldInv.exchangeRate);
+                    
+                    if (oldInv.currency === 'USD') balUSD += oldInv.receivedAmount;
+                    else if (oldInv.currency === 'IRT') balIRT += oldInv.receivedAmount;
+                    else balAFN += oldInv.receivedAmount;
+                    balTotal += oldReceivedBase;
+                }
+
                 customerUpdates.push({ id: oc.id, newBalances: { AFN: balAFN, USD: balUSD, IRT: balIRT, Total: balTotal } });
             }
         }
@@ -1006,6 +1025,19 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 else if (oldInv.currency === 'IRT') balIRT += oldInv.totalAmount;
                 else balAFN += oldInv.totalAmount;
                 balTotal += oldInv.totalAmountAFN;
+
+                // Revert old received amount impact on supplier
+                if (oldInv.receivedAmount && oldInv.receivedAmount > 0) {
+                    const oldReceivedBase = oldInv.currency === state.storeSettings.baseCurrency
+                        ? oldInv.receivedAmount
+                        : (state.storeSettings.currencyConfigs[oldInv.currency].method === 'multiply' ? oldInv.receivedAmount / oldInv.exchangeRate : oldInv.receivedAmount * oldInv.exchangeRate);
+                    
+                    if (oldInv.currency === 'USD') balUSD -= oldInv.receivedAmount;
+                    else if (oldInv.currency === 'IRT') balIRT -= oldInv.receivedAmount;
+                    else balAFN -= oldInv.receivedAmount;
+                    balTotal -= oldReceivedBase;
+                }
+
                 supplierUpdates.push({ id: os.id, newBalances: { AFN: balAFN, USD: balUSD, IRT: balIRT, Total: balTotal } });
             }
         }
@@ -1020,12 +1052,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 let balIRT = prevUpdate ? prevUpdate.newBalances.IRT : nc.balanceIRT;
                 let balTotal = prevUpdate ? prevUpdate.newBalances.Total : nc.balance;
 
+                // Invoice Debit
                 if (currency === 'USD') balUSD += totalTransactional;
                 else if (currency === 'IRT') balIRT += totalTransactional;
                 else balAFN += totalTransactional;
-                
                 balTotal += totalBaseAmount;
 
+                // Payment Credit
+                if (receivedAmount > 0) {
+                    if (currency === 'USD') balUSD -= receivedAmount;
+                    else if (currency === 'IRT') balIRT -= receivedAmount;
+                    else balAFN -= receivedAmount;
+                    balTotal -= receivedAmountBase;
+                }
+                
                 const finalBal = { AFN: balAFN, USD: balUSD, IRT: balIRT, Total: balTotal };
                 if (prevUpdate) prevUpdate.newBalances = finalBal;
                 else customerUpdates.push({ id: nc.id, newBalances: finalBal });
@@ -1046,8 +1086,15 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 if (currency === 'USD') balUSD -= totalTransactional;
                 else if (currency === 'IRT') balIRT -= totalTransactional;
                 else balAFN -= totalTransactional;
-                
                 balTotal -= totalBaseAmount;
+
+                // Payment impact on supplier (they owe us less or we owe them more)
+                if (receivedAmount > 0) {
+                    if (currency === 'USD') balUSD += receivedAmount;
+                    else if (currency === 'IRT') balIRT += receivedAmount;
+                    else balAFN += receivedAmount;
+                    balTotal += receivedAmountBase;
+                }
 
                 const finalBal = { AFN: balAFN, USD: balUSD, IRT: balIRT, Total: balTotal };
                 if (prevUpdate) prevUpdate.newBalances = finalBal;
@@ -1055,8 +1102,41 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             }
         }
 
-        const customerTx: CustomerTransaction = { id: crypto.randomUUID(), customerId: customerId || '', type: 'credit_sale', amount: totalTransactional, date: finalInv.timestamp, description: `فاکتور #${invId}`, invoiceId: invId, currency, isCash: !customerId };
-        const supplierTx: SupplierTransaction = { id: crypto.randomUUID(), supplierId: supplierIntermediaryId || '', type: 'payment', amount: totalTransactional, date: finalInv.timestamp, description: `فروش کالا (واسطه) - فاکتور #${invId}`, invoiceId: invId, currency, isCash: false };
+        const customerTxs: CustomerTransaction[] = [
+            { id: crypto.randomUUID(), customerId: customerId || '', type: 'credit_sale', amount: totalTransactional, date: finalInv.timestamp, description: `فاکتور #${invId}`, invoiceId: invId, currency, isCash: !customerId }
+        ];
+        if (receivedAmount > 0 && customerId) {
+            const isFullPayment = receivedAmount >= totalTransactional;
+            customerTxs.push({
+                id: crypto.randomUUID(),
+                customerId: customerId,
+                type: 'receipt',
+                amount: receivedAmount,
+                date: finalInv.timestamp,
+                description: isFullPayment ? `تسویه کامل فاکتور #${invId}` : `پیش‌پرداخت فاکتور #${invId}`,
+                invoiceId: invId,
+                currency,
+                isCash: true
+            });
+        }
+
+        const supplierTxs: SupplierTransaction[] = [
+            { id: crypto.randomUUID(), supplierId: supplierIntermediaryId || '', type: 'payment', amount: totalTransactional, date: finalInv.timestamp, description: `فروش کالا (واسطه) - فاکتور #${invId}`, invoiceId: invId, currency, isCash: false }
+        ];
+        if (receivedAmount > 0 && supplierIntermediaryId) {
+            const isFullPayment = receivedAmount >= totalTransactional;
+            supplierTxs.push({
+                id: crypto.randomUUID(),
+                supplierId: supplierIntermediaryId,
+                type: 'receipt',
+                amount: receivedAmount,
+                date: finalInv.timestamp,
+                description: isFullPayment ? `دریافت وجه (واسطه) - تسویه فاکتور #${invId}` : `دریافت وجه (واسطه) - پیش‌پرداخت فاکتور #${invId}`,
+                invoiceId: invId,
+                currency,
+                isCash: true
+            });
+        }
 
         try {
             // --- Activity Feature Logic ---
@@ -1123,16 +1203,16 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                     stockRestores, 
                     stockUpdates, 
                     customerUpdates, 
-                    customerTx,
+                    customerTxs,
                     supplierUpdates,
-                    supplierIntermediaryId ? supplierTx : undefined
+                    supplierIntermediaryId ? supplierTxs : []
                 );
             } else {
                 await api.createSale(
                     finalInv, 
                     stockUpdates, 
-                    customerUpdates[0] ? { ...customerUpdates[0], transaction: customerTx } : undefined,
-                    supplierUpdates[0] ? { ...supplierUpdates[0], transaction: supplierTx } : undefined
+                    customerUpdates[0] ? { ...customerUpdates[0], transactions: customerTxs } : undefined,
+                    supplierUpdates[0] ? { ...supplierUpdates[0], transactions: supplierTxs } : undefined
                 );
             }
             

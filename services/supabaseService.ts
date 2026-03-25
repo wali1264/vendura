@@ -288,8 +288,8 @@ export const api = {
     createSale: async (
         invoice: SaleInvoice, 
         stockUpdates: {batchId: string, newStock: number}[], 
-        customerUpdate?: {id: string, newBalances: {AFN: number, USD: number, IRT: number, Total: number}, transaction: CustomerTransaction},
-        supplierUpdate?: {id: string, newBalances: {AFN: number, USD: number, IRT: number, Total: number}, transaction: SupplierTransaction}
+        customerUpdate?: {id: string, newBalances: {AFN: number, USD: number, IRT: number, Total: number}, transactions: CustomerTransaction[]},
+        supplierUpdate?: {id: string, newBalances: {AFN: number, USD: number, IRT: number, Total: number}, transactions: SupplierTransaction[]}
     ) => {
         await db.putItem(db.STORES.SALE_INVOICES, invoice);
         for (const update of stockUpdates) {
@@ -303,14 +303,18 @@ export const api = {
             const customer = await db.getById<Customer>(db.STORES.CUSTOMERS, customerUpdate.id);
             if (customer) {
                 await db.putItem(db.STORES.CUSTOMERS, { ...customer, balanceAFN: customerUpdate.newBalances.AFN, balanceUSD: customerUpdate.newBalances.USD, balanceIRT: customerUpdate.newBalances.IRT, balance: customerUpdate.newBalances.Total });
-                await db.putItem(db.STORES.CUSTOMER_TX, customerUpdate.transaction);
+                for (const tx of customerUpdate.transactions) {
+                    await db.putItem(db.STORES.CUSTOMER_TX, tx);
+                }
             }
         }
         if (supplierUpdate) {
             const supplier = await db.getById<Supplier>(db.STORES.SUPPLIERS, supplierUpdate.id);
             if (supplier) {
                 await db.putItem(db.STORES.SUPPLIERS, { ...supplier, balanceAFN: supplierUpdate.newBalances.AFN, balanceUSD: supplierUpdate.newBalances.USD, balanceIRT: supplierUpdate.newBalances.IRT, balance: supplierUpdate.newBalances.Total });
-                await db.putItem(db.STORES.SUPPLIER_TX, supplierUpdate.transaction);
+                for (const tx of supplierUpdate.transactions) {
+                    await db.putItem(db.STORES.SUPPLIER_TX, tx);
+                }
             }
         }
     },
@@ -321,9 +325,9 @@ export const api = {
         stockRestores: {batchId: string, quantity: number}[], 
         stockUpdates: {batchId: string, newStock: number}[], 
         customerUpdates: {id: string, newBalances: {AFN: number, USD: number, IRT: number, Total: number}}[], 
-        transaction: CustomerTransaction,
+        customerTransactions: CustomerTransaction[],
         supplierUpdates: {id: string, newBalances: {AFN: number, USD: number, IRT: number, Total: number}}[] = [],
-        supplierTransaction?: SupplierTransaction
+        supplierTransactions: SupplierTransaction[] = []
     ) => {
         await db.putItem(db.STORES.SALE_INVOICES, newInvoiceData);
         for (const restore of stockRestores) {
@@ -344,26 +348,30 @@ export const api = {
             const customer = await db.getById<Customer>(db.STORES.CUSTOMERS, cu.id);
             if (customer) await db.putItem(db.STORES.CUSTOMERS, { ...customer, balanceAFN: cu.newBalances.AFN, balanceUSD: cu.newBalances.USD, balanceIRT: cu.newBalances.IRT, balance: cu.newBalances.Total });
         }
-        if (transaction.customerId) {
-            const txs = await db.getAll<CustomerTransaction>(db.STORES.CUSTOMER_TX);
-            const existingTx = txs.find(t => t.invoiceId === invoiceId);
-            if (existingTx) {
-                Object.assign(existingTx, { amount: transaction.amount, date: transaction.date, currency: transaction.currency, customerId: transaction.customerId });
-                await db.putItem(db.STORES.CUSTOMER_TX, existingTx);
-            } else await db.putItem(db.STORES.CUSTOMER_TX, transaction);
+        
+        // Handle Customer Transactions: Delete old ones for this invoice and insert new ones
+        const allCustomerTxs = await db.getAll<CustomerTransaction>(db.STORES.CUSTOMER_TX);
+        const oldCustomerTxs = allCustomerTxs.filter(t => t.invoiceId === invoiceId);
+        for (const otx of oldCustomerTxs) {
+            await db.deleteItem(db.STORES.CUSTOMER_TX, otx.id);
+        }
+        for (const ntx of customerTransactions) {
+            await db.putItem(db.STORES.CUSTOMER_TX, ntx);
         }
 
         for (const su of supplierUpdates) {
             const supplier = await db.getById<Supplier>(db.STORES.SUPPLIERS, su.id);
             if (supplier) await db.putItem(db.STORES.SUPPLIERS, { ...supplier, balanceAFN: su.newBalances.AFN, balanceUSD: su.newBalances.USD, balanceIRT: su.newBalances.IRT, balance: su.newBalances.Total });
         }
-        if (supplierTransaction) {
-            const txs = await db.getAll<SupplierTransaction>(db.STORES.SUPPLIER_TX);
-            const existingTx = txs.find(t => t.invoiceId === invoiceId);
-            if (existingTx) {
-                Object.assign(existingTx, { amount: supplierTransaction.amount, date: supplierTransaction.date, currency: supplierTransaction.currency, supplierId: supplierTransaction.supplierId });
-                await db.putItem(db.STORES.SUPPLIER_TX, existingTx);
-            } else await db.putItem(db.STORES.SUPPLIER_TX, supplierTransaction);
+
+        // Handle Supplier Transactions: Delete old ones for this invoice and insert new ones
+        const allSupplierTxs = await db.getAll<SupplierTransaction>(db.STORES.SUPPLIER_TX);
+        const oldSupplierTxs = allSupplierTxs.filter(t => t.invoiceId === invoiceId);
+        for (const otx of oldSupplierTxs) {
+            await db.deleteItem(db.STORES.SUPPLIER_TX, otx.id);
+        }
+        for (const ntx of supplierTransactions) {
+            await db.putItem(db.STORES.SUPPLIER_TX, ntx);
         }
     },
 
@@ -387,10 +395,12 @@ export const api = {
             const customer = await db.getById<Customer>(db.STORES.CUSTOMERS, customerUpdate.id);
             if (customer) {
                 await db.putItem(db.STORES.CUSTOMERS, { ...customer, balanceAFN: customerUpdate.newBalances.AFN, balanceUSD: customerUpdate.newBalances.USD, balanceIRT: customerUpdate.newBalances.IRT, balance: customerUpdate.newBalances.Total });
-                // Delete associated transaction
+                // Delete ALL associated transactions
                 const txs = await db.getAll<CustomerTransaction>(db.STORES.CUSTOMER_TX);
-                const tx = txs.find(t => t.invoiceId === invoiceId);
-                if (tx) await db.deleteItem(db.STORES.CUSTOMER_TX, tx.id);
+                const relatedTxs = txs.filter(t => t.invoiceId === invoiceId);
+                for (const tx of relatedTxs) {
+                    await db.deleteItem(db.STORES.CUSTOMER_TX, tx.id);
+                }
             }
         }
         
@@ -398,10 +408,12 @@ export const api = {
             const supplier = await db.getById<Supplier>(db.STORES.SUPPLIERS, supplierUpdate.id);
             if (supplier) {
                 await db.putItem(db.STORES.SUPPLIERS, { ...supplier, balanceAFN: supplierUpdate.newBalances.AFN, balanceUSD: supplierUpdate.newBalances.USD, balanceIRT: supplierUpdate.newBalances.IRT, balance: supplierUpdate.newBalances.Total });
-                // Delete associated transaction
+                // Delete ALL associated transactions
                 const txs = await db.getAll<SupplierTransaction>(db.STORES.SUPPLIER_TX);
-                const tx = txs.find(t => t.invoiceId === invoiceId);
-                if (tx) await db.deleteItem(db.STORES.SUPPLIER_TX, tx.id);
+                const relatedTxs = txs.filter(t => t.invoiceId === invoiceId);
+                for (const tx of relatedTxs) {
+                    await db.deleteItem(db.STORES.SUPPLIER_TX, tx.id);
+                }
             }
         }
     },

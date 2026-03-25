@@ -55,6 +55,7 @@ export interface SaleInvoice {
   supplierIntermediaryId?: string; // Optional: for sales to suppliers
   currency: 'AFN' | 'USD' | 'IRT'; // Multi-currency support
   exchangeRate: number;            // Rate to base currency (AFN)
+  receivedAmount?: number;         // NEW: Amount received at the time of sale
   appliedShares?: { [companyId: string]: number };
   activityDepositId?: string;
 }

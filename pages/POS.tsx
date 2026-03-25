@@ -217,7 +217,8 @@ const CartSide: React.FC<any> = ({
     isSupplierMenuOpen, setIsSupplierMenuOpen, totalAmount, completeSale, setInvoiceDateRange,
     handlePrintInvoice, handleEditInvoice, storeSettings, setMobileView, addToCart, handleOpenReturnModal,
     isProcessing, currency, setCurrency, exchangeRate, setExchangeRate, saleInvoices,
-    deleteSaleInvoice, setInvoiceToDelete, enableActivity, setEnableActivity
+    deleteSaleInvoice, setInvoiceToDelete, enableActivity, setEnableActivity,
+    receivedAmount, setReceivedAmount
 }) => {
     
     const rateNum = Number(exchangeRate) || 1;
@@ -403,6 +404,36 @@ const CartSide: React.FC<any> = ({
                     </select>
                 </div>
                 
+                {selectedCustomerId && (
+                    <div className="mb-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                        <div className="flex justify-between items-center mb-2">
+                            <label htmlFor="received-amount" className="text-md font-semibold text-blue-700">مبلغ دریافتی ({currency})</label>
+                            {receivedAmount && Number(receivedAmount) > 0 && (
+                                <span className="text-[10px] font-bold text-slate-400">
+                                    {Number(receivedAmount) >= convertedTotal ? 'تسویه کامل' : `باقی‌مانده: ${(convertedTotal - Number(receivedAmount)).toLocaleString()}`}
+                                </span>
+                            )}
+                        </div>
+                        <div className="relative">
+                            <input 
+                                id="received-amount"
+                                type="text" 
+                                inputMode="decimal"
+                                value={receivedAmount} 
+                                onChange={e => setReceivedAmount(toEnglishDigits(e.target.value).replace(/[^0-9.]/g, ''))} 
+                                className="w-full p-3 bg-blue-50 border-2 border-blue-200 rounded-lg focus:ring-blue-500 focus:border-blue-500 font-black text-lg text-blue-800 outline-none transition-all" 
+                                placeholder={`مبلغ دریافتی به ${currency}...`}
+                            />
+                            <button 
+                                onClick={() => setReceivedAmount(convertedTotal.toFixed(2))}
+                                className="absolute left-2 top-1/2 -translate-y-1/2 px-2 py-1 bg-blue-600 text-white text-[10px] font-bold rounded-md hover:bg-blue-700 transition-colors"
+                            >
+                                تسویه کل
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 <div className="flex items-center justify-between gap-3">
                      <div className="flex items-center gap-2">
                         <span className="text-lg font-bold text-slate-500">مبلغ کل:</span>
@@ -601,6 +632,7 @@ const POS: React.FC = () => {
     const [isProcessing, setIsProcessing] = useState(false);
     const [invoiceToDelete, setInvoiceToDelete] = useState<string | null>(null);
     const [enableActivity, setEnableActivity] = useState(false);
+    const [receivedAmount, setReceivedAmount] = useState<string>('');
 
     useEffect(() => {
         const customer = customers.find(c => c.id === selectedCustomerId);
@@ -815,7 +847,8 @@ const POS: React.FC = () => {
                 currency, 
                 currency === baseCurrency ? 1 : Number(exchangeRate),
                 selectedSupplierId || undefined,
-                enableActivity
+                enableActivity,
+                receivedAmount ? Number(receivedAmount) : 0
             );
             
             showToast(result.message);
@@ -828,6 +861,7 @@ const POS: React.FC = () => {
                 setActiveTab('cart');
                 setCurrency(baseCurrency);
                 setExchangeRate('');
+                setReceivedAmount('');
             }
         } catch (e) {
             console.error(e);
@@ -847,6 +881,7 @@ const POS: React.FC = () => {
             if(inv) {
                 setCurrency(inv.currency);
                 setExchangeRate(inv.exchangeRate === 1 ? '' : String(inv.exchangeRate));
+                setReceivedAmount(inv.receivedAmount ? String(inv.receivedAmount) : '');
             }
             setActiveTab('cart');
             setMobileView('cart');
@@ -1020,7 +1055,8 @@ const POS: React.FC = () => {
                           handlePrintInvoice, handleEditInvoice, storeSettings, setMobileView, addToCart, handleOpenReturnModal,
                           isProcessing, currency, setCurrency, exchangeRate, setExchangeRate,
                           saleInvoices, deleteSaleInvoice, setInvoiceToDelete,
-                          enableActivity, setEnableActivity
+                          enableActivity, setEnableActivity,
+                          receivedAmount, setReceivedAmount
                         }}
                      />
                 </div>

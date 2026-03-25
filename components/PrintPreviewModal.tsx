@@ -237,11 +237,25 @@ const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ invoice, onClose 
                                 </div>
                             )}
                         </div>
-                        <div className="w-1/2 flex flex-col items-center justify-center text-center px-2">
+                        <div className={`${invoice.receivedAmount && invoice.receivedAmount > 0 ? 'w-full' : 'w-1/2'} flex flex-col items-center justify-center text-center px-2`}>
                             <div className="flex items-center justify-center gap-2 text-lg print:text-xl font-bold text-slate-900">
-                                <span className="text-sm print:text-xs font-black">مبلغ نهایی:</span>
+                                <span className="text-sm print:text-xs font-black">مبلغ کل فاکتور:</span>
                                 <span className="text-blue-700 font-black" dir="ltr">({invoice.totalAmount.toLocaleString('fa-IR', { maximumFractionDigits: 3 })} {currencySuffix})</span>
                             </div>
+                            
+                            {invoice.receivedAmount && invoice.receivedAmount > 0 && (
+                                <>
+                                    <div className="flex items-center justify-center gap-2 text-md print:text-lg font-bold text-emerald-700 mt-1">
+                                        <span className="text-xs print:text-[10px] font-black">مبلغ پرداختی:</span>
+                                        <span className="font-black" dir="ltr">({invoice.receivedAmount.toLocaleString('fa-IR', { maximumFractionDigits: 3 })} {currencySuffix})</span>
+                                    </div>
+                                    <div className="flex items-center justify-center gap-2 text-md print:text-lg font-bold text-red-700 mt-1 border-t border-slate-200 pt-1">
+                                        <span className="text-xs print:text-[10px] font-black">باقی‌مانده نسیه:</span>
+                                        <span className="font-black" dir="ltr">({(invoice.totalAmount - invoice.receivedAmount).toLocaleString('fa-IR', { maximumFractionDigits: 3 })} {currencySuffix})</span>
+                                    </div>
+                                </>
+                            )}
+
                             <div className="text-[10px] print:text-[9px] text-slate-500 font-bold mt-1 border-t border-slate-100 pt-1 w-full line-clamp-2 leading-tight">
                                 مبلغ به حروف: {numberToPersianWords(invoice.totalAmount)} {currencySuffix}
                             </div>
