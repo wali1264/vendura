@@ -47,7 +47,9 @@ const SpecialReports: React.FC = () => {
         expenses, 
         companies, 
         wastageRecords,
-        storeSettings
+        storeSettings,
+        customerTransactions,
+        supplierTransactions
     } = useAppContext();
 
     const [selectedCategoryId, setSelectedCategoryId] = useState('inventory');
@@ -68,8 +70,8 @@ const SpecialReports: React.FC = () => {
             label: 'انبار و موجودی',
             icon: <InventoryIcon className="w-5 h-5" />,
             reports: [
-                { id: 'total_inventory', label: 'موجودی کل انبار', description: 'لیست تمام کالاها با موجودی فعلی و ارزش ریالی' },
-                { id: 'company_inventory', label: 'موجودی به تفکیک کمپانی', description: 'مشاهده موجودی محصولات متعلق به یک شرکت خاص' },
+                { id: 'total_inventory', label: 'موجودی کل انبار', description: 'لیست تمام کالاها با موجودی فعلی و تاریخ انقضا' },
+                { id: 'company_inventory', label: 'موجودی به تفکیک کمپانی', description: 'مشاهده موجودی محصولات متعلق به یک شرکت خاص با تاریخ انقضا' },
                 { id: 'expiry_report', label: 'گزارش انقضا', description: 'کالاهایی که تاریخ انقضای آن‌ها نزدیک است' },
                 { id: 'product_flow', label: 'ردیابی کالا (ورود و خروج)', description: 'تاریخچه کامل تراکنش‌های یک کالای خاص' },
             ]
@@ -80,7 +82,8 @@ const SpecialReports: React.FC = () => {
             icon: <POSIcon className="w-5 h-5" />,
             reports: [
                 { id: 'sales_by_customer', label: 'فروش به تفکیک مشتری', description: 'چه کالاهایی به کدام مشتریان فروخته شده است' },
-                { id: 'customer_balances', label: 'صورت‌حساب جامع مشتریان', description: 'لیست مانده حساب تمام مشتریان' },
+                { id: 'customer_balances', label: 'مانده حساب مشتریان', description: 'لیست مانده حساب تمام مشتریان به تفکیک ارز' },
+                { id: 'customer_balances_detailed', label: 'صورت‌حساب جامع مشتریان (Debit/Credit)', description: 'گزارش تحلیلی بدهکار، بستانکار و مانده نهایی مشتریان' },
                 { id: 'wastage_report', label: 'گزارش ضایعات', description: 'کالاهای ضایع شده به تفکیک علت و شرکت' },
             ]
         },
@@ -89,7 +92,8 @@ const SpecialReports: React.FC = () => {
             label: 'خرید و تأمین‌کنندگان',
             icon: <PurchaseIcon className="w-5 h-5" />,
             reports: [
-                { id: 'supplier_balances', label: 'صورت‌حساب جامع تأمین‌کنندگان', description: 'میزان بدهی و بستانکاری به شرکت‌ها' },
+                { id: 'supplier_balances', label: 'مانده حساب تأمین‌کنندگان', description: 'میزان بدهی و بستانکاری به شرکت‌ها به تفکیک ارز' },
+                { id: 'supplier_balances_detailed', label: 'صورت‌حساب جامع تأمین‌کنندگان (Debit/Credit)', description: 'گزارش تحلیلی بدهکار، بستانکار و مانده نهایی تأمین‌کنندگان' },
                 { id: 'purchase_history', label: 'تاریخچه خرید از کمپانی', description: 'لیست فاکتورهای خرید از یک شرکت خاص' },
             ]
         },
@@ -113,16 +117,21 @@ const SpecialReports: React.FC = () => {
 
         switch (selectedReportId) {
             case 'total_inventory':
-                headers = ['نام کالا', 'کمپانی', 'موجودی کل', 'قیمت فروش', 'ارزش کل (فروش)'];
+                headers = ['نام کالا', 'کمپانی', 'موجودی کل', 'تاریخ انقضا (نزدیک‌ترین)'];
                 data = products.map(p => {
                     const company = companies.find(c => c.id === p.companyId)?.name || 'نامشخص';
                     const totalStock = p.batches.reduce((sum, b) => sum + b.stock, 0);
+                    // Find the earliest expiry date among batches with stock
+                    const activeBatches = p.batches.filter(b => b.stock > 0 && b.expiryDate);
+                    const earliestExpiry = activeBatches.length > 0 
+                        ? activeBatches.sort((a, b) => a.expiryDate!.localeCompare(b.expiryDate!))[0].expiryDate 
+                        : '-';
+                    
                     return [
                         p.name,
                         company,
                         totalStock,
-                        p.salePrice.toLocaleString(),
-                        (totalStock * p.salePrice).toLocaleString()
+                        earliestExpiry
                     ];
                 });
                 break;
@@ -131,14 +140,21 @@ const SpecialReports: React.FC = () => {
                 if (!selectedCompanyId) return { data: [], headers: [], title: 'لطفاً کمپانی را انتخاب کنید' };
                 const companyName = companies.find(c => c.id === selectedCompanyId)?.name || '';
                 title = `موجودی کمپانی ${companyName}`;
-                headers = ['نام کالا', 'موجودی', 'قیمت فروش'];
+                headers = ['نام کالا', 'موجودی', 'تاریخ انقضا'];
                 data = products
                     .filter(p => p.companyId === selectedCompanyId)
-                    .map(p => [
-                        p.name,
-                        p.batches.reduce((sum, b) => sum + b.stock, 0),
-                        p.salePrice.toLocaleString()
-                    ]);
+                    .map(p => {
+                        const totalStock = p.batches.reduce((sum, b) => sum + b.stock, 0);
+                        const activeBatches = p.batches.filter(b => b.stock > 0 && b.expiryDate);
+                        const earliestExpiry = activeBatches.length > 0 
+                            ? activeBatches.sort((a, b) => a.expiryDate!.localeCompare(b.expiryDate!))[0].expiryDate 
+                            : '-';
+                        return [
+                            p.name,
+                            totalStock,
+                            earliestExpiry
+                        ];
+                    });
                 break;
 
             case 'expiry_report':
@@ -242,6 +258,37 @@ const SpecialReports: React.FC = () => {
                 ]);
                 break;
 
+            case 'customer_balances_detailed':
+                headers = ['نام مشتری', 'بدهکار (Debit)', 'بستانکار (Credit)', 'مانده نهایی (Balance)'];
+                data = customers.map(c => {
+                    const txs = customerTransactions.filter(t => t.customerId === c.id);
+                    // Debit: Sales and credit adjustments (positive impact on balance)
+                    const debit = txs
+                        .filter(t => t.type === 'credit_sale' || t.type === 'receipt')
+                        .reduce((sum, t) => {
+                            const config = storeSettings.currencyConfigs[t.currency as 'AFN'|'USD'|'IRT'];
+                            const baseAmount = t.currency === storeSettings.baseCurrency ? t.amount : (config.method === 'multiply' ? t.amount / (t.exchangeRate || 1) : t.amount * (t.exchangeRate || 1));
+                            return sum + baseAmount;
+                        }, 0);
+                    
+                    // Credit: Payments and returns (negative impact on balance)
+                    const credit = txs
+                        .filter(t => t.type === 'payment' || t.type === 'sale_return')
+                        .reduce((sum, t) => {
+                            const config = storeSettings.currencyConfigs[t.currency as 'AFN'|'USD'|'IRT'];
+                            const baseAmount = t.currency === storeSettings.baseCurrency ? t.amount : (config.method === 'multiply' ? t.amount / (t.exchangeRate || 1) : t.amount * (t.exchangeRate || 1));
+                            return sum + baseAmount;
+                        }, 0);
+
+                    return [
+                        c.name,
+                        debit.toLocaleString(),
+                        credit.toLocaleString(),
+                        (debit - credit).toLocaleString()
+                    ];
+                });
+                break;
+
             case 'supplier_balances':
                 headers = ['نام تأمین‌کننده', 'شرکت', 'مانده (AFN)', 'مانده (USD)', 'مانده (IRT)'];
                 data = suppliers.map(s => [
@@ -251,6 +298,38 @@ const SpecialReports: React.FC = () => {
                     s.balanceUSD.toLocaleString(),
                     s.balanceIRT.toLocaleString()
                 ]);
+                break;
+
+            case 'supplier_balances_detailed':
+                headers = ['نام تأمین‌کننده', 'بدهکار (Debit)', 'بستانکار (Credit)', 'مانده نهایی (Balance)'];
+                data = suppliers.map(s => {
+                    const txs = supplierTransactions.filter(t => t.supplierId === s.id);
+                    // Debit: Payments we made to them (negative impact on balance we owe)
+                    const debit = txs
+                        .filter(t => t.type === 'payment' || t.type === 'receipt')
+                        .reduce((sum, t) => {
+                            const config = storeSettings.currencyConfigs[t.currency as 'AFN'|'USD'|'IRT'];
+                            const baseAmount = t.currency === storeSettings.baseCurrency ? t.amount : (config.method === 'multiply' ? t.amount / (t.exchangeRate || 1) : t.amount * (t.exchangeRate || 1));
+                            return sum + baseAmount;
+                        }, 0);
+                    
+                    // Credit: Purchases we made from them (positive impact on balance we owe)
+                    const credit = txs
+                        .filter(t => t.type === 'purchase' || t.type === 'purchase_return')
+                        .reduce((sum, t) => {
+                            const config = storeSettings.currencyConfigs[t.currency as 'AFN'|'USD'|'IRT'];
+                            const baseAmount = t.currency === storeSettings.baseCurrency ? t.amount : (config.method === 'multiply' ? t.amount / (t.exchangeRate || 1) : t.amount * (t.exchangeRate || 1));
+                            const factor = t.type === 'purchase' ? 1 : -1;
+                            return sum + (baseAmount * factor);
+                        }, 0);
+
+                    return [
+                        s.name,
+                        debit.toLocaleString(),
+                        credit.toLocaleString(),
+                        (credit - debit).toLocaleString()
+                    ];
+                });
                 break;
 
             case 'expense_summary':

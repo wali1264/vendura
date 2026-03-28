@@ -127,6 +127,7 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, isBatchLocked = fa
     const [recognitionLang, setRecognitionLang] = useState<'fa-IR' | 'en-US'>('fa-IR');
     const recognitionRef = useRef<SpeechRecognition | null>(null);
     const activeFieldRef = useRef<HTMLInputElement | null>(null);
+    const shouldRestartRecognition = useRef(false);
 
     const numericFields = ['purchasePrice', 'salePrice', 'itemsPerPackage', 'lotNumber', 'stockPackages', 'stockUnits', 'purchaseExchangeRate'];
 
@@ -147,49 +148,65 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, isBatchLocked = fa
 
     useEffect(() => {
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (SpeechRecognition) {
+        if (SpeechRecognition && !recognitionRef.current) {
             const recognition = new SpeechRecognition();
-            recognition.continuous = true;
+            recognition.continuous = false;
             recognition.interimResults = true;
             
             recognition.onresult = (event: SpeechRecognitionEvent) => {
-                let finalTranscript = '';
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                   if (event.results[i].isFinal) {
-                       finalTranscript += event.results[i][0].transcript;
-                   }
-                }
+                const transcript = Array.from(event.results)
+                    .map(result => result[0])
+                    .map(result => result.transcript)
+                    .join('');
 
-                if (finalTranscript && activeFieldRef.current) {
-                    const field = activeFieldRef.current;
-                    const fieldName = field.name;
+                if (transcript && activeFieldRef.current) {
+                    const fieldName = activeFieldRef.current.name;
                     let processedTranscript: string;
 
                     if (fieldName === 'expiryDate') {
-                        processedTranscript = parseSmartDate(finalTranscript);
+                        processedTranscript = parseSmartDate(transcript);
                     } else if (numericFields.includes(fieldName)) {
-                        processedTranscript = parseSpokenNumber(finalTranscript);
+                        processedTranscript = parseSpokenNumber(transcript);
                     } else {
-                        processedTranscript = finalTranscript.trim();
+                        processedTranscript = transcript;
                     }
                     
                     if (fieldName === 'purchaseExchangeRate') {
                         setPurchaseExchangeRate(processedTranscript);
+                    } else if (fieldName === 'stockPackages') {
+                        setStockPackages(processedTranscript);
+                        handleStockChange(processedTranscript, stockUnits);
+                    } else if (fieldName === 'stockUnits') {
+                        setStockUnits(processedTranscript);
+                        handleStockChange(stockPackages, processedTranscript);
                     } else {
-                        field.value = processedTranscript;
-                        field.dispatchEvent(new Event('input', { bubbles: true }));
+                        setFormData(prev => ({ ...prev, [fieldName]: processedTranscript }));
                     }
                 }
             };
 
             recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+                console.error('Speech recognition error:', event.error);
                 if (event.error === 'not-allowed') setMicError('دسترسی میکروفون مسدود است.');
                 setIsListening(false);
+                shouldRestartRecognition.current = false;
             };
-            recognition.onend = () => setIsListening(false);
+
+            recognition.onend = () => {
+                if (shouldRestartRecognition.current) {
+                    try {
+                        recognitionRef.current?.start();
+                    } catch (e) {
+                        setIsListening(false);
+                    }
+                } else {
+                    setIsListening(false);
+                }
+            };
+
             recognitionRef.current = recognition;
         }
-    }, []);
+    }, [stockPackages, stockUnits]);
 
     useEffect(() => {
         if (recognitionRef.current) {
@@ -201,12 +218,28 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, isBatchLocked = fa
         if (!recognitionRef.current) return;
         setMicError(''); 
         if (isListening) {
+            shouldRestartRecognition.current = false;
             recognitionRef.current.stop();
+            setIsListening(false);
         } else {
+            // Clear the active field when starting to listen, matching POS behavior
+            if (activeFieldRef.current) {
+                const fieldName = activeFieldRef.current.name;
+                if (fieldName === 'purchaseExchangeRate') setPurchaseExchangeRate('');
+                else if (fieldName === 'stockPackages') { setStockPackages(''); handleStockChange('', stockUnits); }
+                else if (fieldName === 'stockUnits') { setStockUnits(''); handleStockChange(stockPackages, ''); }
+                else setFormData(prev => ({ ...prev, [fieldName]: '' }));
+            }
+            
             try {
+                shouldRestartRecognition.current = true;
                 recognitionRef.current.start();
                 setIsListening(true);
-            } catch (e) { setMicError("خطا در دسترسی به میکروفون."); }
+            } catch (e) { 
+                setMicError("خطا در دسترسی به میکروفون."); 
+                setIsListening(false);
+                shouldRestartRecognition.current = false;
+            }
         }
     };
 

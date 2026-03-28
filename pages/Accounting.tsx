@@ -1955,8 +1955,8 @@ const PartnersTab: React.FC = () => {
         const effectiveProfit = editingWithdrawal ? profit + (editingWithdrawal.amountBase || 0) : profit;
 
         if (amountInBase > effectiveProfit + 0.01) { 
-            alert(`مبلغ برداشت (${formatCurrency(amountInBase, storeSettings)}) نمی‌تواند بیشتر از سود قابل برداشت (${formatCurrency(effectiveProfit, storeSettings)}) باشد.`);
-            return;
+            const proceed = confirm(`مبلغ برداشت (${formatCurrency(amountInBase, storeSettings)}) بیشتر از سود قابل برداشت (${formatCurrency(effectiveProfit, storeSettings)}) است. تراز شریک منفی خواهد شد. آیا ادامه می‌دهید؟`);
+            if (!proceed) return;
         }
 
         if (editingWithdrawal) {
