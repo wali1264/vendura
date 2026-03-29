@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useAppContext } from '../AppContext';
 import type { StoreSettings, Service, Role, User, Permission } from '../types';
-import { PlusIcon, TrashIcon, DownloadIcon, UploadIcon, UserGroupIcon, KeyIcon, WarningIcon, CheckIcon, SettingsIcon } from '../components/icons';
+import { PlusIcon, MinusIcon, TrashIcon, DownloadIcon, UploadIcon, UserGroupIcon, KeyIcon, WarningIcon, CheckIcon, SettingsIcon } from '../components/icons';
 import Toast from '../components/Toast';
 import { formatCurrency, toEnglishDigits } from '../utils/formatters';
 import { ALL_PERMISSIONS, groupPermissions } from '../utils/permissions';
@@ -81,6 +81,32 @@ const StoreDetailsTab: React.FC<TabProps> = ({ showToast }) => {
                                 </button>
                             )}
                         </div>
+                        <div className="mt-4 flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                            <span className="text-sm font-bold text-slate-600">اندازه لوگو:</span>
+                            <div className="flex items-center gap-2">
+                                <button 
+                                    type="button" 
+                                    onClick={() => setFormData({ ...formData, logoRightSize: Math.max(20, (formData.logoRightSize || 80) - 5) })}
+                                    className="p-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600 transition-colors"
+                                >
+                                    <MinusIcon className="w-4 h-4" />
+                                </button>
+                                <input 
+                                    type="number" 
+                                    value={formData.logoRightSize || 80} 
+                                    onChange={(e) => setFormData({ ...formData, logoRightSize: parseInt(e.target.value) || 80 })}
+                                    className="w-20 p-1.5 text-center border border-slate-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-blue-100 outline-none"
+                                />
+                                <button 
+                                    type="button" 
+                                    onClick={() => setFormData({ ...formData, logoRightSize: (formData.logoRightSize || 80) + 5 })}
+                                    className="p-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600 transition-colors"
+                                >
+                                    <PlusIcon className="w-4 h-4" />
+                                </button>
+                                <span className="text-xs text-slate-400 font-medium">پیکسل</span>
+                            </div>
+                        </div>
                     </div>
                     <div>
                         <label className="block text-sm font-bold text-slate-700 mb-2">لوگوی سمت چپ (بالای فاکتور)</label>
@@ -101,6 +127,32 @@ const StoreDetailsTab: React.FC<TabProps> = ({ showToast }) => {
                                     <TrashIcon className="w-5 h-5" />
                                 </button>
                             )}
+                        </div>
+                        <div className="mt-4 flex items-center gap-3 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                            <span className="text-sm font-bold text-slate-600">اندازه لوگو:</span>
+                            <div className="flex items-center gap-2">
+                                <button 
+                                    type="button" 
+                                    onClick={() => setFormData({ ...formData, logoLeftSize: Math.max(20, (formData.logoLeftSize || 80) - 5) })}
+                                    className="p-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600 transition-colors"
+                                >
+                                    <MinusIcon className="w-4 h-4" />
+                                </button>
+                                <input 
+                                    type="number" 
+                                    value={formData.logoLeftSize || 80} 
+                                    onChange={(e) => setFormData({ ...formData, logoLeftSize: parseInt(e.target.value) || 80 })}
+                                    className="w-20 p-1.5 text-center border border-slate-200 rounded-lg text-sm font-bold focus:ring-2 focus:ring-blue-100 outline-none"
+                                />
+                                <button 
+                                    type="button" 
+                                    onClick={() => setFormData({ ...formData, logoLeftSize: (formData.logoLeftSize || 80) + 5 })}
+                                    className="p-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-600 transition-colors"
+                                >
+                                    <PlusIcon className="w-4 h-4" />
+                                </button>
+                                <span className="text-xs text-slate-400 font-medium">پیکسل</span>
+                            </div>
                         </div>
                     </div>
                 </div>

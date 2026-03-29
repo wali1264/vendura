@@ -43,6 +43,8 @@ const DEFAULT_SETTINGS: StoreSettings = {
     baseCurrency: 'AFN',
     logoLeft: '',
     logoRight: '',
+    logoLeftSize: 80,
+    logoRightSize: 80,
     currencyConfigs: {
         AFN: { code: 'AFN', name: 'افغانی', symbol: 'AFN', method: 'multiply' },
         USD: { code: 'USD', name: 'دلار', symbol: '$', method: 'divide' },

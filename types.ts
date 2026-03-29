@@ -324,6 +324,8 @@ export interface StoreSettings {
     baseCurrency: 'AFN' | 'USD' | 'IRT';
     logoLeft?: string;
     logoRight?: string;
+    logoLeftSize?: number;
+    logoRightSize?: number;
     currencyConfigs: {
         AFN: CurrencyConfig;
         USD: CurrencyConfig;

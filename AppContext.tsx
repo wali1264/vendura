@@ -155,6 +155,8 @@ const getDefaultState = (): AppState => {
             expiryThresholdMonths: 3, currencyName: 'افغانی', currencySymbol: 'AFN',
             packageLabel: 'بسته', unitLabel: 'عدد',
             baseCurrency: 'AFN',
+            logoLeftSize: 80,
+            logoRightSize: 80,
             currencyConfigs: {
                 AFN: { code: 'AFN', name: 'افغانی', symbol: 'AFN', method: 'multiply' },
                 USD: { code: 'USD', name: 'دلار', symbol: 'USD', method: 'divide' },

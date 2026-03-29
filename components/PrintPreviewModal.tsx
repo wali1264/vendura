@@ -130,12 +130,12 @@ const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ invoice, onClose 
                     <div className="text-center mb-2 pb-2 print:mb-6 print:pb-4 border-b relative">
                         {/* Logos for print */}
                         {storeSettings.logoRight && (
-                            <div className="hidden print:block absolute right-0 top-0 h-16 w-16 md:h-20 md:w-20">
+                            <div className="hidden print:block absolute right-0 top-0" style={{ height: `${storeSettings.logoRightSize || 80}px`, width: `${storeSettings.logoRightSize || 80}px` }}>
                                 <img src={storeSettings.logoRight} alt="Logo Right" className="h-full w-full object-contain" referrerPolicy="no-referrer" />
                             </div>
                         )}
                         {storeSettings.logoLeft && (
-                            <div className="hidden print:block absolute left-0 top-0 h-16 w-16 md:h-20 md:w-20">
+                            <div className="hidden print:block absolute left-0 top-0" style={{ height: `${storeSettings.logoLeftSize || 80}px`, width: `${storeSettings.logoLeftSize || 80}px` }}>
                                 <img src={storeSettings.logoLeft} alt="Logo Left" className="h-full w-full object-contain" referrerPolicy="no-referrer" />
                             </div>
                         )}

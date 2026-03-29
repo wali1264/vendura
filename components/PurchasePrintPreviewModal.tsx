@@ -24,7 +24,18 @@ const PurchasePrintPreviewModal: React.FC<PurchasePrintPreviewModalProps> = ({ i
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white p-8 rounded-lg shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
                 <div id="print-modal-content" className="text-gray-900 flex-grow flex flex-col min-h-0 printable-area">
-                    <div className="text-center mb-8 border-b pb-6">
+                    <div className="text-center mb-8 border-b pb-6 relative">
+                        {/* Logos for print */}
+                        {storeSettings.logoRight && (
+                            <div className="hidden print:block absolute right-0 top-0" style={{ height: `${storeSettings.logoRightSize || 80}px`, width: `${storeSettings.logoRightSize || 80}px` }}>
+                                <img src={storeSettings.logoRight} alt="Logo Right" className="h-full w-full object-contain" referrerPolicy="no-referrer" />
+                            </div>
+                        )}
+                        {storeSettings.logoLeft && (
+                            <div className="hidden print:block absolute left-0 top-0" style={{ height: `${storeSettings.logoLeftSize || 80}px`, width: `${storeSettings.logoLeftSize || 80}px` }}>
+                                <img src={storeSettings.logoLeft} alt="Logo Left" className="h-full w-full object-contain" referrerPolicy="no-referrer" />
+                            </div>
+                        )}
                         <h1 className="text-3xl font-extrabold text-blue-600">{storeSettings.storeName}</h1>
                         <p className="text-sm text-slate-500">{storeSettings.address}</p>
                         <p className="text-sm text-slate-500">تلفن: {storeSettings.phone}</p>
