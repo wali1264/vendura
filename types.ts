@@ -291,6 +291,11 @@ export interface Partner {
 export interface Company {
     id: string;
     name: string;
+    initialProfit?: number; // Positive for profit, negative for loss
+    initialProfitCurrency?: 'AFN' | 'USD' | 'IRT';
+    initialProfitExchangeRate?: number;
+    initialProfitDate?: string;
+    initialProfitDescription?: string;
 }
 
 export interface SalesMemoImage {

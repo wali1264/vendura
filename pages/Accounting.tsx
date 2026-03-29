@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useAppContext } from '../AppContext';
-import type { Supplier, Employee, Customer, Expense, AnyTransaction, CustomerTransaction, SupplierTransaction, PayrollTransaction, DepositHolder, Partner } from '../types';
+import type { Supplier, Employee, Customer, Expense, AnyTransaction, CustomerTransaction, SupplierTransaction, PayrollTransaction, DepositHolder, Partner, Company } from '../types';
 import { PlusIcon, XIcon, EyeIcon, TrashIcon, UserGroupIcon, AccountingIcon, TruckIcon, ChevronDownIcon, CheckIcon, EditIcon, FilterIcon, SettingsIcon, ArchiveBoxXMarkIcon, CheckCircleIcon, BuildingIcon, ZapIcon, HistoryIcon, PrintIcon } from '../components/icons';
 import Toast from '../components/Toast';
 import { formatCurrency, toEnglishDigits, formatBalance } from '../utils/formatters';
@@ -1691,31 +1691,48 @@ const CategoryManagerModal: React.FC<{ categories: string[], onClose: () => void
 
 
 const CompaniesTab: React.FC = () => {
-    const { companies, addCompany, deleteCompany, updateCompany, products, purchaseInvoices } = useAppContext();
-    const [newCompanyName, setNewCompanyName] = useState('');
-    const [isAdding, setIsAdding] = useState(false);
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const [editName, setEditName] = useState('');
+    const { companies, addCompany, deleteCompany, updateCompany, products, purchaseInvoices, storeSettings } = useAppContext();
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [editingCompany, setEditingCompany] = useState<Company | null>(null);
+    
+    const [name, setName] = useState('');
+    const [initialProfit, setInitialProfit] = useState('');
+    const [currency, setCurrency] = useState<'AFN' | 'USD' | 'IRT'>(storeSettings.baseCurrency);
+    const [exchangeRate, setExchangeRate] = useState('1');
+    const [date, setDate] = useState(new Date().toISOString());
+    const [description, setDescription] = useState('');
 
-    const handleAdd = async () => {
-        if (!newCompanyName.trim()) return;
-        const result = await addCompany(newCompanyName);
-        if (result.success) {
-            setNewCompanyName('');
-            setIsAdding(false);
-        } else {
-            alert(result.message);
-        }
+    const resetForm = () => {
+        setName('');
+        setInitialProfit('');
+        setCurrency(storeSettings.baseCurrency);
+        setExchangeRate('1');
+        setDate(new Date().toISOString());
+        setDescription('');
+        setEditingCompany(null);
     };
 
-    const handleUpdate = async (id: string) => {
-        if (!editName.trim()) {
-            setEditingId(null);
-            return;
+    const handleSave = async () => {
+        if (!name.trim()) return;
+        
+        const profitData = initialProfit ? {
+            amount: Number(initialProfit),
+            currency,
+            exchangeRate: Number(exchangeRate),
+            date,
+            description
+        } : undefined;
+
+        let result;
+        if (editingCompany) {
+            result = await updateCompany(editingCompany.id, name.trim(), profitData);
+        } else {
+            result = await addCompany(name.trim(), profitData);
         }
-        const result = await updateCompany(id, editName.trim());
+
         if (result.success) {
-            setEditingId(null);
+            setIsModalOpen(false);
+            resetForm();
         } else {
             alert(result.message);
         }
@@ -1732,10 +1749,13 @@ const CompaniesTab: React.FC = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h2 className="text-2xl font-black text-slate-800">مدیریت کمپانی‌ها</h2>
-                    <p className="text-slate-500 mt-1">تعریف و مدیریت شرکت‌های تأمین‌کننده کالا</p>
+                    <p className="text-slate-500 mt-1">تعریف و مدیریت شرکت‌های تأمین‌کننده کالا و سوابق مالی</p>
                 </div>
                 <button 
-                    onClick={() => setIsAdding(true)}
+                    onClick={() => {
+                        resetForm();
+                        setIsModalOpen(true);
+                    }}
                     className="flex items-center justify-center gap-2 bg-blue-600 text-white px-6 py-3.5 rounded-2xl font-black shadow-xl shadow-blue-100 hover:scale-[1.02] transition-all active:scale-95"
                 >
                     <PlusIcon className="w-5 h-5" />
@@ -1743,35 +1763,7 @@ const CompaniesTab: React.FC = () => {
                 </button>
             </div>
 
-            {isAdding && (
-                <div className="bg-slate-50 p-6 rounded-3xl border-2 border-dashed border-slate-200 flex flex-col md:flex-row gap-4 animate-in zoom-in-95 duration-300">
-                    <input 
-                        type="text"
-                        value={newCompanyName}
-                        onChange={(e) => setNewCompanyName(e.target.value)}
-                        placeholder="نام کمپانی را وارد کنید..."
-                        className="flex-grow p-4 rounded-2xl border-2 border-slate-200 focus:border-blue-500 outline-none font-bold text-lg"
-                        autoFocus
-                        onKeyDown={(e) => e.key === 'Enter' && handleAdd()}
-                    />
-                    <div className="flex gap-2">
-                        <button 
-                            onClick={handleAdd}
-                            className="bg-emerald-500 text-white px-8 py-4 rounded-2xl font-black shadow-lg shadow-emerald-100 hover:bg-emerald-600 transition-all"
-                        >
-                            ثبت
-                        </button>
-                        <button 
-                            onClick={() => setIsAdding(false)}
-                            className="bg-slate-200 text-slate-600 px-8 py-4 rounded-2xl font-black hover:bg-slate-300 transition-all"
-                        >
-                            انصراف
-                        </button>
-                    </div>
-                </div>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {companies.length === 0 ? (
                     <div className="col-span-full py-20 text-center bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
                         <BuildingIcon className="w-16 h-16 text-slate-300 mx-auto mb-4" />
@@ -1779,64 +1771,164 @@ const CompaniesTab: React.FC = () => {
                     </div>
                 ) : (
                     companies.map(company => (
-                        <div key={company.id} className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-all group flex items-center justify-between">
-                            <div className="flex items-center gap-4 flex-grow">
-                                <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                                    <BuildingIcon className="w-6 h-6" />
+                        <div key={company.id} className="bg-white rounded-3xl border border-slate-100 shadow-sm hover:shadow-xl transition-all group overflow-hidden flex flex-col">
+                            <div className="p-6 flex-grow">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
+                                        <BuildingIcon className="w-6 h-6" />
+                                    </div>
+                                    <div className="flex gap-1">
+                                        <button 
+                                            onClick={() => {
+                                                setEditingCompany(company);
+                                                setName(company.name);
+                                                setInitialProfit(company.initialProfit?.toString() || '');
+                                                setCurrency(company.initialProfitCurrency || storeSettings.baseCurrency);
+                                                setExchangeRate(company.initialProfitExchangeRate?.toString() || '1');
+                                                setDate(company.initialProfitDate || new Date().toISOString());
+                                                setDescription(company.initialProfitDescription || '');
+                                                setIsModalOpen(true);
+                                            }}
+                                            className="p-2 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all"
+                                            title="ویرایش"
+                                        >
+                                            <EditIcon className="w-5 h-5" />
+                                        </button>
+                                        <button 
+                                            onClick={() => {
+                                                if (isCompanyInUse(company.id)) {
+                                                    alert("این کمپانی در محصولات یا فاکتورها استفاده شده است و قابل حذف نیست.");
+                                                    return;
+                                                }
+                                                if(confirm(`آیا از حذف کمپانی "${company.name}" اطمینان دارید؟`)) {
+                                                    deleteCompany(company.id);
+                                                }
+                                            }}
+                                            disabled={isCompanyInUse(company.id)}
+                                            className={`p-2 rounded-xl transition-all ${
+                                                isCompanyInUse(company.id) 
+                                                    ? 'text-slate-100 cursor-not-allowed' 
+                                                    : 'text-slate-300 hover:text-rose-500 hover:bg-rose-50'
+                                            }`}
+                                        >
+                                            <TrashIcon className="w-5 h-5" />
+                                        </button>
+                                    </div>
                                 </div>
-                                {editingId === company.id ? (
-                                    <input 
-                                        type="text"
-                                        value={editName}
-                                        onChange={(e) => setEditName(e.target.value)}
-                                        className="flex-grow p-2 rounded-xl border-2 border-blue-500 outline-none font-bold"
-                                        autoFocus
-                                        onBlur={() => handleUpdate(company.id)}
-                                        onKeyDown={(e) => {
-                                            if(e.key === 'Enter') handleUpdate(company.id);
-                                            if(e.key === 'Escape') setEditingId(null);
-                                        }}
-                                    />
-                                ) : (
-                                    <span className="font-black text-lg text-slate-700">{company.name}</span>
+                                <h3 className="font-black text-xl text-slate-800 mb-4">{company.name}</h3>
+                                
+                                {company.initialProfit !== undefined && (
+                                    <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                                        <p className="text-[10px] font-black text-slate-400 uppercase tracking-tighter mb-1">سود/ضرر انتقالی (تاریخی)</p>
+                                        <p className={`text-sm font-black ${company.initialProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                            {company.initialProfit.toLocaleString()} {company.initialProfitCurrency}
+                                            {company.initialProfitCurrency !== storeSettings.baseCurrency && (
+                                                <span className="text-[10px] text-slate-400 mr-2">
+                                                    ({formatCurrency(
+                                                        company.initialProfitCurrency === storeSettings.baseCurrency 
+                                                            ? company.initialProfit 
+                                                            : (storeSettings.currencyConfigs[company.initialProfitCurrency!].method === 'multiply' 
+                                                                ? company.initialProfit / (company.initialProfitExchangeRate || 1) 
+                                                                : company.initialProfit * (company.initialProfitExchangeRate || 1)),
+                                                        storeSettings
+                                                    )})
+                                                </span>
+                                            )}
+                                        </p>
+                                    </div>
                                 )}
-                            </div>
-                            <div className="flex gap-1">
-                                <button 
-                                    onClick={() => {
-                                        setEditingId(company.id);
-                                        setEditName(company.name);
-                                    }}
-                                    className="p-2 text-slate-300 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
-                                    title="ویرایش نام"
-                                >
-                                    <EditIcon className="w-5 h-5" />
-                                </button>
-                                <button 
-                                    onClick={() => {
-                                        if (isCompanyInUse(company.id)) {
-                                            alert("این کمپانی در محصولات یا فاکتورها استفاده شده است و قابل حذف نیست.");
-                                            return;
-                                        }
-                                        if(confirm(`آیا از حذف کمپانی "${company.name}" اطمینان دارید؟`)) {
-                                            deleteCompany(company.id);
-                                        }
-                                    }}
-                                    disabled={isCompanyInUse(company.id)}
-                                    className={`p-2 rounded-xl transition-all opacity-0 group-hover:opacity-100 ${
-                                        isCompanyInUse(company.id) 
-                                            ? 'text-slate-200 cursor-not-allowed' 
-                                            : 'text-slate-300 hover:text-rose-500 hover:bg-rose-50'
-                                    }`}
-                                    title={isCompanyInUse(company.id) ? "این کمپانی در حال استفاده است" : "حذف کمپانی"}
-                                >
-                                    <TrashIcon className="w-5 h-5" />
-                                </button>
                             </div>
                         </div>
                     ))
                 )}
             </div>
+
+            {isModalOpen && (
+                <Modal 
+                    title={editingCompany ? "ویرایش کمپانی" : "افزودن کمپانی جدید"} 
+                    onClose={() => {
+                        setIsModalOpen(false);
+                        resetForm();
+                    }}
+                >
+                    <div className="space-y-6">
+                        <div className="space-y-2">
+                            <label className="text-sm font-bold text-slate-600 mr-2">نام کمپانی</label>
+                            <input 
+                                type="text"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder="مثلاً: شرکت دارویی البرز"
+                                className="w-full p-4 rounded-2xl border-2 border-slate-100 focus:border-blue-500 outline-none font-bold text-lg"
+                                autoFocus
+                            />
+                        </div>
+
+                        <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4">
+                            <h4 className="font-black text-slate-700 text-sm flex items-center gap-2">
+                                <HistoryIcon className="w-4 h-4 text-blue-500" />
+                                سوابق مالی گذشته (سود و ضرر انباشته)
+                            </h4>
+                            
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase mr-2">مبلغ (مثبت: سود / منفی: ضرر)</label>
+                                    <input 
+                                        type="number"
+                                        value={initialProfit}
+                                        onChange={(e) => setInitialProfit(e.target.value)}
+                                        className="w-full p-3 rounded-xl border-2 border-white focus:border-blue-500 outline-none font-bold"
+                                        placeholder="0"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase mr-2">ارز</label>
+                                    <select 
+                                        value={currency}
+                                        onChange={(e) => setCurrency(e.target.value as any)}
+                                        className="w-full p-3 rounded-xl border-2 border-white focus:border-blue-500 outline-none font-bold"
+                                    >
+                                        <option value="AFN">AFN</option>
+                                        <option value="USD">USD</option>
+                                        <option value="IRT">IRT</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            {currency !== storeSettings.baseCurrency && (
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-400 uppercase mr-2">نرخ تبدیل به {storeSettings.baseCurrency}</label>
+                                    <input 
+                                        type="number"
+                                        value={exchangeRate}
+                                        onChange={(e) => setExchangeRate(e.target.value)}
+                                        className="w-full p-3 rounded-xl border-2 border-white focus:border-blue-500 outline-none font-bold"
+                                    />
+                                </div>
+                            )}
+
+                            <JalaliDateInput value={date} onChange={setDate} label="تاریخ ثبت سوابق" />
+
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-black text-slate-400 uppercase mr-2">توضیحات سوابق</label>
+                                <textarea 
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    className="w-full p-3 rounded-xl border-2 border-white focus:border-blue-500 outline-none font-bold min-h-[80px] text-sm"
+                                    placeholder="مثلاً: سود انباشته سال مالی ۱۴۰۲"
+                                />
+                            </div>
+                        </div>
+
+                        <button 
+                            onClick={handleSave}
+                            className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all active:scale-95"
+                        >
+                            {editingCompany ? "بروزرسانی اطلاعات" : "ثبت کمپانی"}
+                        </button>
+                    </div>
+                </Modal>
+            )}
         </div>
     );
 };
@@ -1881,6 +1973,17 @@ const PartnersTab: React.FC = () => {
         const share = partner.shares.find(s => s.companyId === companyId);
         if (!share) return 0;
 
+        // 0. Company Initial Profit/Loss
+        const company = companies.find(c => c.id === companyId);
+        let initialProfitBase = 0;
+        if (company?.initialProfit) {
+            const amount = company.initialProfit;
+            const currency = company.initialProfitCurrency || storeSettings.baseCurrency;
+            const rate = company.initialProfitExchangeRate || 1;
+            const config = storeSettings.currencyConfigs[currency];
+            initialProfitBase = currency === storeSettings.baseCurrency ? amount : (config.method === 'multiply' ? amount / rate : amount * rate);
+        }
+
         // 1. Company Revenue & COGS
         let totalRevenue = 0;
         let totalCOGS = 0;
@@ -1910,7 +2013,7 @@ const PartnersTab: React.FC = () => {
         const totalExpenses = companyExpenses.reduce((sum, e) => sum + (e.amountBase || 0), 0);
 
         // 3. Net Profit for Company
-        const netProfit = totalRevenue - totalCOGS - totalExpenses;
+        const netProfit = initialProfitBase + totalRevenue - totalCOGS - totalExpenses;
 
         // 4. Partner's Share of Profit
         const partnerProfit = (netProfit * share.percentage) / 100;

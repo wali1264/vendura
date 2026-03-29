@@ -86,8 +86,8 @@ interface AppContextType extends AppState {
     deleteService: (serviceId: string) => void;
     
     // Companies
-    addCompany: (name: string) => { success: boolean; message: string };
-    updateCompany: (id: string, name: string) => Promise<{ success: boolean; message: string }>;
+    addCompany: (name: string, initialProfit?: { amount: number, currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => Promise<{ success: boolean; message: string }>;
+    updateCompany: (id: string, name: string, initialProfit?: { amount: number, currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => Promise<{ success: boolean; message: string }>;
     deleteCompany: (id: string) => void;
     
     // Accounting
@@ -1752,13 +1752,18 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         });
     };
 
-    const addCompany = async (name: string) => {
+    const addCompany = async (name: string, initialProfit?: { amount: number, currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => {
         if (!name.trim()) return { success: false, message: "نام کمپانی نمی‌تواند خالی باشد." };
         if (state.companies.some(c => c.name === name.trim())) return { success: false, message: "این کمپانی قبلاً ثبت شده است." };
         
         const newCompany: Company = {
             id: Date.now().toString(),
-            name: name.trim()
+            name: name.trim(),
+            initialProfit: initialProfit?.amount,
+            initialProfitCurrency: initialProfit?.currency,
+            initialProfitExchangeRate: initialProfit?.exchangeRate,
+            initialProfitDate: initialProfit?.date,
+            initialProfitDescription: initialProfit?.description
         };
         await api.addCompany(newCompany);
         setState(prev => ({ ...prev, companies: [...prev.companies, newCompany] }));
@@ -1770,9 +1775,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         setState(prev => ({ ...prev, companies: prev.companies.filter(c => c.id !== id) }));
     };
 
-    const updateCompany = async (id: string, name: string) => {
+    const updateCompany = async (id: string, name: string, initialProfit?: { amount: number, currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => {
         if (!name.trim()) return { success: false, message: "نام کمپانی نمی‌تواند خالی باشد." };
-        const updatedCompany = { id, name: name.trim() };
+        const updatedCompany: Company = { 
+            id, 
+            name: name.trim(),
+            initialProfit: initialProfit?.amount,
+            initialProfitCurrency: initialProfit?.currency,
+            initialProfitExchangeRate: initialProfit?.exchangeRate,
+            initialProfitDate: initialProfit?.date,
+            initialProfitDescription: initialProfit?.description
+        };
         await api.updateCompany(updatedCompany);
         setState(prev => ({
             ...prev,
