@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { InTransitInvoice, PurchaseInvoiceItem, Supplier, Product, SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionErrorEvent, SupplierTransaction, PurchaseInvoice } from '../types';
 import { useAppContext } from '../AppContext';
 import { PlusIcon, EditIcon, TrashIcon, CheckIcon, WarningIcon, MicIcon, SearchIcon, XIcon, TruckIcon, ChevronDownIcon, AccountingIcon, EyeIcon } from '../components/icons';
+import { ExpiryDateInput } from '../components/ExpiryDateInput';
 import Toast from '../components/Toast';
 import DateRangeFilter from '../components/DateRangeFilter';
 import PackageUnitInput from '../components/PackageUnitInput';
@@ -253,11 +254,10 @@ const InTransitMovementModal: React.FC<{
                                                         </div>
                                                         <div>
                                                             <label className="block text-[10px] font-black text-slate-400 mb-1">تاریخ انقضا (در صورت وجود)</label>
-                                                            <input 
-                                                                type="date" 
+                                                            <ExpiryDateInput 
                                                                 value={m.expiryDate} 
-                                                                onChange={e => handleMovementChange(item.productId, 'expiryDate', e.target.value)} 
-                                                                className="w-full p-3 bg-white border-2 border-slate-100 rounded-xl text-sm font-bold focus:outline-none focus:border-emerald-500" 
+                                                                onChange={val => handleMovementChange(item.productId, 'expiryDate', val)} 
+                                                                className="h-12 text-sm"
                                                             />
                                                         </div>
                                                     </div>
@@ -602,7 +602,14 @@ const InTransit: React.FC = () => {
                                                     )}
                                                 </div>
                                                 <div><label className="text-[10px] font-black text-slate-400 mb-2 block">شماره لات</label><input type="text" value={item.lotNumber} onChange={e => { const u = [...items]; u[idx].lotNumber = toEnglishDigits(e.target.value); setItems(u); }} placeholder="اختیاری در فاکتور" className="w-full h-12 p-3 bg-white border-2 border-slate-200 rounded-xl text-center font-mono font-black" /></div>
-                                                <div><label className="text-[10px] font-black text-slate-400 mb-2 block">انقضا</label><input type="date" value={item.expiryDate} onChange={e => { const u = [...items]; u[idx].expiryDate = e.target.value; setItems(u); }} className="w-full h-12 p-3 bg-white border border-slate-200 rounded-xl text-sm font-bold" /></div>
+                                                <div>
+                                                    <label className="text-[10px] font-black text-slate-400 mb-2 block">انقضا</label>
+                                                    <ExpiryDateInput 
+                                                        value={item.expiryDate} 
+                                                        onChange={val => { const u = [...items]; u[idx].expiryDate = val; setItems(u); }} 
+                                                        className="h-12 text-sm"
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
                                     );

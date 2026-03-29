@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { PurchaseInvoice, PurchaseInvoiceItem, Supplier, Product, SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionErrorEvent } from '../types';
 import { useAppContext } from '../AppContext';
 import { PlusIcon, EditIcon, TrashIcon, PrintIcon, WarningIcon, MicIcon, SearchIcon, XIcon, TruckIcon, ZapIcon, BuildingIcon, ChevronDownIcon } from '../components/icons';
+import { ExpiryDateInput } from '../components/ExpiryDateInput';
 import Toast from '../components/Toast';
 import DateRangeFilter from '../components/DateRangeFilter';
 import PurchasePrintPreviewModal from '../components/PurchasePrintPreviewModal';
@@ -659,7 +660,11 @@ const Purchases: React.FC = () => {
                                                     <div className="flex-grow">
                                                         <label className="text-xs font-bold text-slate-500 mb-2 block">تاریخ انقضا</label>
                                                         {item.showExpiry ? (
-                                                            <input type="date" value={item.expiryDate} onChange={e => handleItemChange(index, 'expiryDate', e.target.value)} className="w-full h-12 p-3 bg-white/80 border border-gray-300 rounded-lg text-sm form-input outline-none focus:ring-4 focus:ring-blue-100 font-bold"/>
+                                                            <ExpiryDateInput 
+                                                                value={item.expiryDate} 
+                                                                onChange={(val) => handleItemChange(index, 'expiryDate', val)} 
+                                                                className="bg-white/80 border-gray-300"
+                                                            />
                                                         ) : (
                                                             <button onClick={() => handleItemChange(index, 'showExpiry', true)} className="w-full h-12 text-sm text-blue-600 font-bold bg-white/80 rounded-lg border-2 border-dashed border-blue-200 hover:bg-blue-50 transition-colors">افزودن انقضا</button>
                                                         )}

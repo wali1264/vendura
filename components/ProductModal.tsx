@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Product, ProductBatch, SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionErrorEvent } from '../types';
 import { XIcon, ChevronDownIcon, MicIcon, WarningIcon, ZapIcon, BuildingIcon } from './icons';
+import { ExpiryDateInput } from './ExpiryDateInput';
 import { parseToPackageAndUnits, parseToTotalUnits, toEnglishDigits } from '../utils/formatters';
 import { useAppContext } from '../AppContext';
 
@@ -540,7 +541,14 @@ const ProductModal: React.FC<ProductModalProps> = ({ product, isBatchLocked = fa
                         {isDetailsOpen && (
                             <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-5 animate-fade-in">
                                 <FormInput label=" کد محصول (بارکد)" id="barcode" name="barcode" type="text" value={formData.barcode} onChange={handleInputChange} placeholder="اسکن بارکد" onKeyDown={handleKeyDown} />
-                                <FormInput label="تاریخ انقضا" id="expiryDate" name="expiryDate" type="date" value={formData.expiryDate} onChange={handleInputChange} onKeyDown={handleKeyDown} error={errors.expiryDate} disabled={!!product && isBatchLocked}/>
+                                <ExpiryDateInput 
+                                    label="تاریخ انقضا" 
+                                    value={formData.expiryDate} 
+                                    onChange={(val) => setFormData(prev => ({ ...prev, expiryDate: val }))} 
+                                    onKeyDown={handleKeyDown} 
+                                    error={errors.expiryDate} 
+                                    disabled={!!product && isBatchLocked}
+                                />
                             </div>
                         )}
                     </div>
