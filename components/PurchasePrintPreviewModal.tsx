@@ -36,7 +36,10 @@ const PurchasePrintPreviewModal: React.FC<PurchasePrintPreviewModalProps> = ({ i
                             <p><strong>تأمین کننده:</strong> {supplier?.name || 'تأمین کننده حذف شده'}</p>
                         </div>
                         <div className="text-left w-full md:w-auto">
-                            <p><strong>تاریخ:</strong> {new Date(invoice.timestamp).toLocaleDateString('fa-IR')}</p>
+                            <p>
+                                <strong>تاریخ:</strong> {new Date(invoice.timestamp).toLocaleDateString('fa-IR')}
+                                <span className="text-[10px] text-slate-400 font-mono mr-2" dir="ltr">({new Date(invoice.timestamp).toISOString().split('T')[0]})</span>
+                            </p>
                             <p><strong>ساعت:</strong> {new Date(invoice.timestamp).toLocaleTimeString('fa-IR')}</p>
                         </div>
                     </div>

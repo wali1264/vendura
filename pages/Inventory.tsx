@@ -188,7 +188,14 @@ const Inventory: React.FC = () => {
                                                                     <td className="p-2 font-mono">{batch.lotNumber}</td>
                                                                     <td className="p-2">{batch.stock}</td>
                                                                     <td className="p-2">{formatCurrency(batch.purchasePrice, storeSettings)}</td>
-                                                                    <td className="p-2">{batch.expiryDate ? new Date(batch.expiryDate).toLocaleDateString('fa-IR') : '-'}</td>
+                                                                    <td className="p-2">
+                                                                        {batch.expiryDate ? (
+                                                                            <div className="flex flex-col items-center">
+                                                                                <span>{new Date(batch.expiryDate).toLocaleDateString('fa-IR')}</span>
+                                                                                <span className="text-[10px] text-slate-400 font-mono" dir="ltr">{batch.expiryDate}</span>
+                                                                            </div>
+                                                                        ) : '-'}
+                                                                    </td>
                                                                 </tr>
                                                             ))}
                                                         </tbody>

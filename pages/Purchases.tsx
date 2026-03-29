@@ -459,7 +459,12 @@ const Purchases: React.FC = () => {
                                 </td>
                                 <td className="p-4 text-slate-700 text-lg">{suppliers.find(s => s.id === invoice.supplierId)?.name || 'ناشناس'}</td>
                                 <td className="p-4 text-slate-700 text-lg">{formatCurrency(invoice.totalAmount, storeSettings, getInvoiceCurrencyName(invoice))}</td>
-                                <td className="p-4 text-slate-500 text-lg">{new Date(invoice.timestamp).toLocaleDateString('fa-IR')}</td>
+                                <td className="p-4 text-slate-500 text-lg">
+                                    <div className="flex flex-col items-center">
+                                        <span>{new Date(invoice.timestamp).toLocaleDateString('fa-IR')}</span>
+                                        <span className="text-[10px] text-slate-400 font-mono" dir="ltr">{new Date(invoice.timestamp).toISOString().split('T')[0]}</span>
+                                    </div>
+                                </td>
                                 <td className="p-4">
                                     <div className="flex justify-center items-center space-x-1 space-x-reverse">
                                         <button onClick={() => handlePrintClick(invoice)} className="p-2 rounded-full text-green-600 hover:text-green-800 hover:bg-green-100/50 transition-colors"><PrintIcon className="w-6 h-6"/></button>
@@ -502,7 +507,13 @@ const Purchases: React.FC = () => {
                         </div>
                          <div className="space-y-2 text-md">
                             <div className="flex justify-between"><span className="text-slate-500">تأمین کننده:</span> <span className="font-semibold">{suppliers.find(s => s.id === invoice.supplierId)?.name || 'ناشناس'}</span></div>
-                            <div className="flex justify-between"><span className="text-slate-500">تاریخ:</span> <span className="font-semibold">{new Date(invoice.timestamp).toLocaleDateString('fa-IR')}</span></div>
+                            <div className="flex justify-between">
+                                <span className="text-slate-500">تاریخ:</span> 
+                                <div className="flex flex-col items-end">
+                                    <span className="font-semibold">{new Date(invoice.timestamp).toLocaleDateString('fa-IR')}</span>
+                                    <span className="text-[10px] text-slate-400 font-mono" dir="ltr">{new Date(invoice.timestamp).toISOString().split('T')[0]}</span>
+                                </div>
+                            </div>
                          </div>
                         <div className="mt-3 pt-3 border-t">
                              <div className="flex justify-between text-lg"><span className="text-slate-500">مبلغ کل:</span> <span className="font-bold text-blue-600">{formatCurrency(invoice.totalAmount, storeSettings, getInvoiceCurrencyName(invoice))}</span></div>
