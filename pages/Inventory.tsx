@@ -11,7 +11,8 @@ import { formatStockToPackagesAndUnits, formatCurrency } from '../utils/formatte
 const Inventory: React.FC = () => {
     const { 
         products, addProduct, updateProduct, deleteProduct, storeSettings, hasPermission,
-        saleInvoices, purchaseInvoices, inTransitInvoices
+        saleInvoices, purchaseInvoices, inTransitInvoices,
+        companies, selectedCompanyId, setSelectedCompanyId
     } = useAppContext();
     const [isProductModalOpen, setIsProductModalOpen] = useState(false);
     const [isWastageModalOpen, setIsWastageModalOpen] = useState(false);
@@ -20,6 +21,7 @@ const Inventory: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [toast, setToast] = useState<string>('');
     const [expandedProducts, setExpandedProducts] = useState<Record<string, boolean>>({});
+    const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
     
     useEffect(() => {
          document.body.style.overflow = (isProductModalOpen || isWastageModalOpen) ? 'hidden' : 'auto';
@@ -87,10 +89,14 @@ const Inventory: React.FC = () => {
         return hasSale || hasPurchase || hasInTransit;
     };
 
-    const filteredProducts = products.filter(p => 
-        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.batches.some(b => b.lotNumber.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    const filteredProducts = products.filter(p => {
+        const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            p.batches.some(b => b.lotNumber.toLowerCase().includes(searchTerm.toLowerCase()));
+        
+        const matchesCompany = !selectedCompanyId || p.companyId === selectedCompanyId;
+        
+        return matchesSearch && matchesCompany;
+    });
 
     const toggleExpand = (productId: string) => {
         setExpandedProducts(prev => ({ ...prev, [productId]: !prev[productId] }));
@@ -112,12 +118,52 @@ const Inventory: React.FC = () => {
                     />
                      <SearchIcon className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 w-6 h-6" />
                 </div>
-                <div className="flex w-full md:w-auto space-x-3 space-x-reverse">
+                <div className="flex w-full md:w-auto space-x-3 space-x-reverse items-center">
                     {hasPermission('inventory:add_product') && (
-                        <button onClick={handleAddProductClick} className="flex-grow flex items-center justify-center bg-blue-600 text-white px-5 py-3 rounded-lg shadow-lg hover:bg-blue-700 btn-primary">
-                            <PlusIcon className="w-6 h-6 ml-2"/>
-                            <span className="font-semibold">افزودن محصول</span>
-                        </button>
+                        <div className="flex items-stretch shadow-lg rounded-lg">
+                            <button onClick={handleAddProductClick} className="flex items-center justify-center bg-blue-600 text-white px-5 py-3 hover:bg-blue-700 transition-colors rounded-r-lg">
+                                <PlusIcon className="w-6 h-6 ml-2"/>
+                                <span className="font-semibold">افزودن محصول</span>
+                            </button>
+                            <div className="relative border-r border-blue-500/30">
+                                <button 
+                                    onClick={() => setIsCompanyDropdownOpen(!isCompanyDropdownOpen)}
+                                    className="h-full px-2 bg-blue-600 text-white hover:bg-blue-700 transition-colors flex items-center justify-center rounded-l-lg"
+                                    title="فیلتر بر اساس کمپانی"
+                                >
+                                    <ChevronDownIcon className={`w-4 h-4 transition-transform duration-200 ${isCompanyDropdownOpen ? 'rotate-180' : ''}`} />
+                                </button>
+                                
+                                {isCompanyDropdownOpen && (
+                                    <>
+                                        <div className="fixed inset-0 z-40" onClick={() => setIsCompanyDropdownOpen(false)}></div>
+                                        <div className="absolute left-0 top-full mt-1 w-56 bg-white rounded-xl shadow-2xl border border-slate-100 z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                                            <div className="px-4 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider">فیلتر کمپانی</div>
+                                            <button
+                                                onClick={() => { setSelectedCompanyId(null); setIsCompanyDropdownOpen(false); }}
+                                                className={`w-full text-right px-4 py-2 text-sm hover:bg-blue-50 transition-colors flex items-center justify-between ${!selectedCompanyId ? 'text-blue-600 font-bold bg-blue-50/50' : 'text-slate-600'}`}
+                                            >
+                                                <span>همه محصولات</span>
+                                                {!selectedCompanyId && <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>}
+                                            </button>
+                                            <div className="my-1 border-t border-slate-50"></div>
+                                            <div className="max-h-60 overflow-y-auto">
+                                                {companies.map(company => (
+                                                    <button
+                                                        key={company.id}
+                                                        onClick={() => { setSelectedCompanyId(company.id); setIsCompanyDropdownOpen(false); }}
+                                                        className={`w-full text-right px-4 py-2 text-sm hover:bg-blue-50 transition-colors flex items-center justify-between ${selectedCompanyId === company.id ? 'text-blue-600 font-bold bg-blue-50/50' : 'text-slate-600'}`}
+                                                    >
+                                                        <span className="truncate ml-2">{company.name}</span>
+                                                        {selectedCompanyId === company.id && <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
                     )}
                 </div>
             </div>

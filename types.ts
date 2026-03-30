@@ -381,6 +381,7 @@ export interface AppState {
     saleInvoiceCounter: number;
     editingSaleInvoiceId: string | null;
     editingPurchaseInvoiceId: string | null;
+    selectedCompanyId: string | null;
     // Auth State
     isAuthenticated: boolean;
     currentUser: User | null;

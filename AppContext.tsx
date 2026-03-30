@@ -89,6 +89,7 @@ interface AppContextType extends AppState {
     addCompany: (name: string, initialProfit?: { amount: number, currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => Promise<{ success: boolean; message: string }>;
     updateCompany: (id: string, name: string, initialProfit?: { amount: number, currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => Promise<{ success: boolean; message: string }>;
     deleteCompany: (id: string) => void;
+    setSelectedCompanyId: (id: string | null) => void;
     
     // Accounting
     addSupplier: (supplier: Omit<Supplier, 'id' | 'balance' | 'balanceAFN' | 'balanceUSD' | 'balanceIRT'>, initialBalance?: { amount: number, type: 'creditor' | 'debtor', currency: 'AFN' | 'USD' | 'IRT', exchangeRate?: number, date?: string, description?: string }) => void;
@@ -166,6 +167,7 @@ const getDefaultState = (): AppState => {
         },
         cart: [], customerTransactions: [], supplierTransactions: [], payrollTransactions: [],
         activities: [], wastageRecords: [], orders: [], saleInvoiceCounter: 0, editingSaleInvoiceId: null, editingPurchaseInvoiceId: null,
+        selectedCompanyId: null,
         isAuthenticated: false, currentUser: null,
         users: [],
         roles: [],
@@ -2518,6 +2520,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const deleteInTransitInvoice = (id: string) => { api.deleteInTransit(id).then(() => fetchData(true)); };
     const addEmployeeAdvanceToEmployee = (eid: string, a: number, d: string, cur?: any, rate?: number) => { addEmployeeAdvance(eid, a, d, cur, rate); };
 
+    const setSelectedCompanyId = (id: string | null) => {
+        setState(prev => ({ ...prev, selectedCompanyId: id }));
+    };
+
     if (isLoading) return <div className="flex items-center justify-center h-screen text-xl font-bold text-blue-600">در حال دریافت اطلاعات...</div>;
 
     return <AppContext.Provider value={{
@@ -2529,7 +2535,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         updateSettings, addService, deleteService, addCompany, updateCompany, deleteCompany, addSupplier, updateSupplier, deleteSupplier, addSupplierPayment, updateSupplierTransaction, deleteSupplierTransaction, addCustomer, updateCustomer, deleteCustomer, addCustomerPayment, updateCustomerTransaction, deleteCustomerTransaction,
         addEmployee, updateEmployee, deleteEmployee, toggleEmployeeActive, addEmployeeAdvance, addEmployeeAdvanceToEmployee, processAndPaySalaries, addExpense, updateExpense, deleteExpense, setInvoiceTransientCustomer,
         addPartner, updatePartner, deletePartner, recordPartnerWithdrawal, updatePartnerWithdrawal, deletePartnerWithdrawal,
-        addDepositHolder, deleteDepositHolder, processDepositTransaction, updateDepositTransaction, deleteDepositTransaction
+        addDepositHolder, deleteDepositHolder, processDepositTransaction, updateDepositTransaction, deleteDepositTransaction,
+        setSelectedCompanyId
     }}>{children}</AppContext.Provider>;
 };
 
