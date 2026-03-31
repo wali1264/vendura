@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
-import type { InvoiceItem, Product, SaleInvoice, SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionErrorEvent, Customer, Supplier, SalesMemoImage, Service, CartItem } from '../types';
+import type { InvoiceItem, Product, SaleInvoice, SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionErrorEvent, Customer, Supplier, SalesMemoImage, Service, CartItem, Company } from '../types';
 import { useAppContext } from '../AppContext';
 import { MicIcon, EditIcon, PrintIcon, TrashIcon, CameraIcon, GalleryIcon, XIcon, CheckIcon, BarcodeIcon, PlusIcon, UserGroupIcon, ChevronDownIcon, WarningIcon } from '../components/icons';
 import Toast from '../components/Toast';
@@ -33,6 +33,9 @@ const ProductSide: React.FC<{
     handleDropdownItemClick: (product: Product) => void, 
     addToCart: (item: Product | Service, type: 'product' | 'service') => void, 
     storeSettings: any,
+    selectedCompanyId: string,
+    setSelectedCompanyId: (id: string) => void,
+    companies: Company[],
     // Props for MiniCart
     cart: CartItem[],
     editingPriceItemId: string | null,
@@ -52,7 +55,8 @@ const ProductSide: React.FC<{
     setIsSearchFocused, handleTakePhotoClick, handlePhotoTaken, isBarcodeModeActive,
     setIsBarcodeModeActive, isListening, toggleListening, recognitionLang, toggleLanguage,
     isSearchFocused, dropdownProducts, handleDropdownItemClick,
-    addToCart, storeSettings, cart, editingPriceItemId, setEditingPriceItemId,
+    addToCart, storeSettings, selectedCompanyId, setSelectedCompanyId, companies,
+    cart, editingPriceItemId, setEditingPriceItemId,
     updateCartItemQuantity, removeFromCart, updateCartItemFinalPrice, hasPermission,
     currency, exchangeRate, onMobileCheckout, saleInvoices, selectedCustomerId, editingSaleInvoiceId
 }) => {
@@ -92,6 +96,24 @@ const ProductSide: React.FC<{
             />
             <div className="absolute left-2 top-1/2 -translate-y-1/2 flex items-center h-full">
                 <div className="flex items-center gap-0.5 md:gap-1">
+                    {/* Company Filter Dropdown */}
+                    <div className="relative group">
+                        <select 
+                            value={selectedCompanyId}
+                            onChange={(e) => setSelectedCompanyId(e.target.value)}
+                            className="appearance-none bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] md:text-xs font-bold py-1 px-2 pr-6 rounded-lg transition-colors cursor-pointer border-none focus:ring-0"
+                            title="فیلتر بر اساس کمپنی"
+                        >
+                            <option value="">همه کمپنی‌ها</option>
+                            {companies.map(c => (
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                        </select>
+                        <div className="absolute right-1 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                            <ChevronDownIcon className="w-3 h-3" />
+                        </div>
+                    </div>
+                    <div className="w-px h-5 bg-slate-300 mx-1"></div>
                     <button 
                         onClick={() => setIsBarcodeModeActive(!isBarcodeModeActive)} 
                         className={`hidden md:block p-1.5 md:p-2 rounded-lg transition-all duration-200 ${isBarcodeModeActive ? 'bg-green-100 text-green-700' : 'text-slate-500 hover:bg-slate-200/60'}`}
@@ -601,10 +623,12 @@ const POS: React.FC = () => {
         deleteSaleInvoice,
         storeSettings,
         currentUser,
-        editingSaleInvoiceId
+        editingSaleInvoiceId,
+        companies: contextCompanies
     } = context;
     
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedCompanyId, setSelectedCompanyId] = useState<string>('');
     const [toast, setToast] = useState('');
     const [activeTab, setActiveTab] = useState<'cart' | 'invoices' | 'services'>('cart');
     const [mobileView, setMobileView] = useState<'products' | 'cart'>('products');
@@ -639,7 +663,34 @@ const POS: React.FC = () => {
         if (!customer?.activityConfig) {
             setEnableActivity(false);
         }
+        // Auto-select company if customer is linked to one, otherwise clear it
+        if (customer?.companyId) {
+            setSelectedCompanyId(customer.companyId);
+        } else {
+            setSelectedCompanyId('');
+        }
     }, [selectedCustomerId, customers]);
+
+    // Handle cart clearing when company changes
+    useEffect(() => {
+        if (selectedCompanyId && cart.length > 0) {
+            const itemsFromOtherCompanies = cart.filter(item => {
+                if (item.type === 'service') return false;
+                const product = products.find(p => p.id === item.id);
+                return product && product.companyId && product.companyId !== selectedCompanyId;
+            });
+
+            if (itemsFromOtherCompanies.length > 0) {
+                // In a real app, we might want to show a confirmation, 
+                // but the user requested "automatically clearing the cart".
+                itemsFromOtherCompanies.forEach(item => {
+                    contextRemoveFromCart(item.id, item.type);
+                });
+                showToast("اجناس کمپنی‌های دیگر از سبد حذف شدند.");
+            }
+        }
+    }, [selectedCompanyId, cart, products, contextRemoveFromCart]);
+
     const [deleteConfirmationText, setDeleteConfirmationText] = useState('');
 
     // Multi-currency POS State
@@ -818,11 +869,14 @@ const POS: React.FC = () => {
     };
     
     const dropdownProducts = useMemo(() => {
-        if (searchTerm.trim() === '') return [];
-        return products
-            .filter(p => p.name.toLowerCase().includes(searchTerm.toLowerCase()))
-            .slice(0, 7);
-    }, [products, searchTerm]);
+        if (searchTerm.trim() === '' && !isSearchFocused) return [];
+        const term = toEnglishDigits(searchTerm.toLowerCase());
+        return products.filter(p => {
+            const matchesSearch = p.name.toLowerCase().includes(term) || (p.barcode && p.barcode.includes(term));
+            const matchesCompany = !selectedCompanyId || p.companyId === selectedCompanyId;
+            return matchesSearch && matchesCompany;
+        }).slice(0, 15);
+    }, [searchTerm, products, isSearchFocused, selectedCompanyId]);
 
     // Total amount in base currency for the whole cart
     const totalAmountBase = cart.reduce((total, item) => {
@@ -1028,6 +1082,7 @@ const POS: React.FC = () => {
                         setIsBarcodeModeActive, isListening, toggleListening, recognitionLang, toggleLanguage,
                         isSearchFocused, dropdownProducts, handleDropdownItemClick,
                         addToCart, storeSettings,
+                        selectedCompanyId, setSelectedCompanyId, companies: contextCompanies,
                         // MiniCart props
                         cart, editingPriceItemId, setEditingPriceItemId, 
                         updateCartItemQuantity: contextUpdateQuantity, removeFromCart: contextRemoveFromCart, 

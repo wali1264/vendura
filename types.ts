@@ -117,6 +117,7 @@ export interface WastageRecord {
   reason: string;
   timestamp: string;
   user: string;
+  companyId?: string; // NEW: Link to company
 }
 
 // --- Orders Module Types (Isolated) ---
@@ -247,6 +248,7 @@ export interface Customer {
     initialBalance?: number;
     initialBalanceCurrency?: 'AFN' | 'USD' | 'IRT';
     initialBalanceExchangeRate?: number;
+    companyId?: string; // NEW: Link to company
 }
 
 export interface CustomerTransaction {

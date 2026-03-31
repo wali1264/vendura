@@ -699,6 +699,7 @@ const CustomersTab = () => {
     const [transactionType, setTransactionType] = useState<'payment' | 'receipt'>('payment');
     const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
     const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
+    const [selectedCompanyId, setSelectedCompanyId] = useState<string | null>(null);
     const [toast, setToast] = useState('');
     const [historyModalData, setHistoryModalData] = useState<{ person: Customer, transactions: CustomerTransaction[] } | null>(null);
     const [receiptModalData, setReceiptModalData] = useState<{ person: Customer, transaction: CustomerTransaction } | null>(null);
@@ -759,6 +760,7 @@ const CustomersTab = () => {
     const [addCustomerAmount, setAddCustomerAmount] = useState('');
     const [addCustomerDate, setAddCustomerDate] = useState(new Date().toISOString().split('T')[0]);
     const [addCustomerDescription, setAddCustomerDescription] = useState('');
+    const [addCustomerCompanyId, setAddCustomerCompanyId] = useState<string>('');
 
     // Payment State
     const [paymentCurrency, setPaymentCurrency] = useState<'AFN' | 'USD' | 'IRT'>(baseCurrency);
@@ -796,6 +798,7 @@ const CustomersTab = () => {
         const customerData = {
             name: formData.get('name') as string,
             phone: formData.get('phone') as string,
+            companyId: addCustomerCompanyId || undefined
         };
 
         const initialBalance = { 
@@ -829,6 +832,7 @@ const CustomersTab = () => {
         setAddCustomerAmount('');
         setAddCustomerDate(new Date().toISOString().split('T')[0]);
         setAddCustomerDescription('');
+        setAddCustomerCompanyId('');
         setEditingCustomer(null);
         setIsAddModalOpen(false);
     };
@@ -929,27 +933,52 @@ const CustomersTab = () => {
 
     const selectedTrustee = useMemo(() => depositHolders.find(h => h.id === selectedTrusteeId), [depositHolders, selectedTrusteeId]);
 
+    const filteredCustomers = useMemo(() => {
+        if (!selectedCompanyId) return customers;
+        return customers.filter(c => c.companyId === selectedCompanyId);
+    }, [customers, selectedCompanyId]);
+
     return (
         <div>
              {toast && <Toast message={toast} onClose={() => setToast('')} />}
-            <button onClick={() => setIsAddModalOpen(true)} className="flex items-center bg-blue-600 text-white px-5 py-3 rounded-xl shadow-lg mb-8 btn-primary">
-                <PlusIcon className="w-5 h-5 ml-2" /> <span className="font-bold">افزودن مشتری</span>
-            </button>
+            <div className="flex flex-wrap items-center gap-4 mb-8">
+                <button onClick={() => setIsAddModalOpen(true)} className="flex items-center bg-blue-600 text-white px-5 py-3 rounded-xl shadow-lg btn-primary">
+                    <PlusIcon className="w-5 h-5 ml-2" /> <span className="font-bold">افزودن مشتری</span>
+                </button>
+
+                <div className="relative">
+                    <select 
+                        value={selectedCompanyId || ''} 
+                        onChange={(e) => setSelectedCompanyId(e.target.value || null)}
+                        className={`p-3 rounded-xl border-2 transition-all outline-none font-bold text-sm ${selectedCompanyId ? 'bg-blue-600 border-blue-600 text-white shadow-lg' : 'bg-white border-slate-200 text-slate-500 hover:border-blue-300'}`}
+                    >
+                        <option value="">همه کمپانی‌ها (فیلتر مشتری)</option>
+                        {companies.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+
             <div className="overflow-hidden rounded-2xl border border-gray-200 shadow-lg hidden md:block bg-white/40">
                 <table className="min-w-full text-center table-zebra">
                     <thead className="bg-slate-50">
                         <tr>
                             <th className="p-4 font-bold text-slate-700">نام مشتری</th>
                             <th className="p-4 font-bold text-slate-700">تلفن</th>
+                            <th className="p-4 font-bold text-slate-700">کمپانی متصل</th>
                             <th className="p-4 font-bold text-slate-700">موجودی حساب (طلب ما)</th>
                             <th className="p-4 font-bold text-slate-700">عملیات</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {customers.map(c => (
+                        {filteredCustomers.map(c => (
                             <tr key={c.id} className="border-t border-gray-200 hover:bg-blue-50/30 transition-colors">
                                 <td onClick={() => handleCustomerClick(c)} className="p-4 text-lg font-bold text-slate-800 cursor-pointer select-none">{c.name}</td>
                                 <td className="p-4 text-md text-slate-600">{c.phone}</td>
+                                <td className="p-4 text-xs font-bold text-blue-600">
+                                    {companies.find(comp => comp.id === c.companyId)?.name || '-'}
+                                </td>
                                 <td className="p-4 text-md font-black" dir="ltr">
                                     <div className="flex flex-col gap-1 items-center">
                                         {[
@@ -977,6 +1006,7 @@ const CustomersTab = () => {
                                             setAddCustomerRate(c.initialBalanceExchangeRate?.toString() || '');
                                             setAddCustomerDate(c.initialBalanceDate || new Date().toISOString().split('T')[0]);
                                             setAddCustomerDescription(c.initialBalanceDescription || '');
+                                            setAddCustomerCompanyId(c.companyId || '');
                                             setIsAddModalOpen(true);
                                         }} className="p-2.5 rounded-xl text-blue-500 hover:text-blue-600 hover:bg-blue-100 transition-all" title="ویرایش اطلاعات"><EditIcon className="w-6 h-6"/></button>
                                         <button onClick={() => handleViewHistory(c)} className="p-2.5 rounded-xl text-slate-500 hover:text-blue-600 hover:bg-blue-100 transition-all" title="مشاهده صورت حساب"><EyeIcon className="w-6 h-6"/></button>
@@ -1001,12 +1031,15 @@ const CustomersTab = () => {
             </div>
 
             <div className="md:hidden space-y-4">
-                {customers.map(c => (
+                {filteredCustomers.map(c => (
                      <div key={c.id} className="bg-white/80 backdrop-blur-xl p-5 rounded-2xl shadow-md border border-slate-100 active:scale-[0.98] transition-all">
                         <div className="flex justify-between items-start mb-1">
                            <div className="flex flex-col">
                                 <h3 onClick={() => handleCustomerClick(c)} className="font-black text-xl text-slate-800 cursor-pointer select-none">{c.name}</h3>
                                 <p className="text-xs text-slate-400 font-medium">{c.phone || 'بدون شماره'}</p>
+                                {c.companyId && (
+                                    <p className="text-[10px] text-blue-600 font-bold mt-1">کمپانی: {companies.find(comp => comp.id === c.companyId)?.name}</p>
+                                )}
                            </div>
                            <div className="flex gap-2">
                                <button onClick={() => {
@@ -1016,6 +1049,7 @@ const CustomersTab = () => {
                                    setAddCustomerRate(c.initialBalanceExchangeRate?.toString() || '');
                                    setAddCustomerDate(c.initialBalanceDate || new Date().toISOString().split('T')[0]);
                                    setAddCustomerDescription(c.initialBalanceDescription || '');
+                                   setAddCustomerCompanyId(c.companyId || '');
                                    setIsAddModalOpen(true);
                                }} className="p-2.5 bg-slate-100 rounded-xl text-blue-600 active:bg-blue-100"><EditIcon className="w-5 h-5" /></button>
                                <button onClick={() => handleViewHistory(c)} className="p-2.5 bg-slate-100 rounded-xl text-slate-600 active:bg-blue-100"><EyeIcon className="w-5 h-5" /></button>
@@ -1060,6 +1094,21 @@ const CustomersTab = () => {
                     <form onSubmit={handleAddCustomerForm} className="space-y-4">
                         <input name="name" defaultValue={editingCustomer?.name} placeholder="نام مشتری" className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50" required/>
                         <input name="phone" defaultValue={editingCustomer?.phone} placeholder="شماره تلفن" className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50" />
+
+                        <div className="space-y-2">
+                            <label className="text-xs font-bold text-slate-500 mr-2">اتصال به کمپانی (اختیاری):</label>
+                            <select 
+                                value={addCustomerCompanyId} 
+                                onChange={(e) => setAddCustomerCompanyId(e.target.value)}
+                                className="w-full p-4 border border-slate-200 rounded-xl outline-none focus:ring-4 focus:ring-blue-50 bg-white font-bold text-sm"
+                            >
+                                <option value="">بدون اتصال به کمپانی</option>
+                                {companies.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                            </select>
+                            <p className="text-[10px] text-slate-400 font-medium px-2">با انتخاب کمپانی، در هنگام فروش به این مشتری، محصولات فقط از این کمپانی فیلتر می‌شوند.</p>
+                        </div>
 
                         <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 space-y-4">
                             <p className="text-sm font-black text-blue-800">تراز اول دوره (اختیاری)</p>

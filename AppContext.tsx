@@ -2,7 +2,7 @@
 import React, { createContext, useContext, ReactNode, useState, useEffect, useCallback, useRef } from 'react';
 import type {
     Product, ProductBatch, SaleInvoice, PurchaseInvoice, InTransitInvoice, PurchaseInvoiceItem, InvoiceItem,
-    Customer, Supplier, Employee, Expense, Service, StoreSettings, CartItem, Company, Partner,
+    Customer, Supplier, Employee, Expense, Service, StoreSettings, CartItem, Company, Partner, WastageRecord,
     CustomerTransaction, SupplierTransaction, PayrollTransaction, ActivityLog,
     User, Role, Permission, AppState, DepositHolder, DepositTransaction,
     Order, OrderStatus, OrderPayment
@@ -661,7 +661,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             const updatedProducts = [...prevState.products];
             updatedProducts[productIndex] = updatedProduct;
 
-            const newWastageRecord = {
+            const newWastageRecord: WastageRecord = {
                 id: Date.now().toString(),
                 productId: product.id,
                 productName: product.name,
@@ -669,7 +669,8 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 totalCost: totalWastageCost,
                 reason: reason,
                 timestamp: new Date().toISOString(),
-                user: prevState.currentUser?.username || 'System'
+                user: prevState.currentUser?.username || 'System',
+                companyId: product.companyId
             };
 
             success = true;

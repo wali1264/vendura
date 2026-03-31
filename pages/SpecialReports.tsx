@@ -82,6 +82,7 @@ const SpecialReports: React.FC = () => {
             icon: <POSIcon className="w-5 h-5" />,
             reports: [
                 { id: 'sales_by_customer', label: 'فروش به تفکیک مشتری', description: 'چه کالاهایی به کدام مشتریان فروخته شده است' },
+                { id: 'sales_by_company_customer', label: 'خلاصه مشتریان به تفکیک کمپانی', description: 'مجموع خرید هر مشتری از محصولات یک شرکت خاص' },
                 { id: 'customer_balances', label: 'مانده حساب مشتریان', description: 'لیست مانده حساب تمام مشتریان به تفکیک ارز' },
                 { id: 'customer_balances_detailed', label: 'صورت‌حساب جامع مشتریان (Debit/Credit)', description: 'گزارش تحلیلی بدهکار، بستانکار و مانده نهایی مشتریان' },
                 { id: 'wastage_report', label: 'گزارش ضایعات', description: 'کالاهای ضایع شده به تفکیک علت و شرکت' },
@@ -139,22 +140,20 @@ const SpecialReports: React.FC = () => {
             case 'company_inventory':
                 if (!selectedCompanyId) return { data: [], headers: [], title: 'لطفاً کمپانی را انتخاب کنید' };
                 const companyName = companies.find(c => c.id === selectedCompanyId)?.name || '';
-                title = `موجودی کمپانی ${companyName}`;
-                headers = ['نام کالا', 'موجودی', 'تاریخ انقضا'];
+                title = `موجودی تفصیلی کمپانی ${companyName}`;
+                headers = ['نام کالا', 'سری ساخت', 'موجودی', 'تاریخ انقضا'];
                 data = products
                     .filter(p => p.companyId === selectedCompanyId)
-                    .map(p => {
-                        const totalStock = p.batches.reduce((sum, b) => sum + b.stock, 0);
-                        const activeBatches = p.batches.filter(b => b.stock > 0 && b.expiryDate);
-                        const earliestExpiry = activeBatches.length > 0 
-                            ? activeBatches.sort((a, b) => a.expiryDate!.localeCompare(b.expiryDate!))[0].expiryDate 
-                            : '-';
-                        return [
-                            p.name,
-                            totalStock,
-                            earliestExpiry
-                        ];
-                    });
+                    .flatMap(p => 
+                        p.batches
+                            .filter(b => b.stock > 0)
+                            .map(b => [
+                                p.name,
+                                b.lotNumber,
+                                b.stock,
+                                b.expiryDate || '-'
+                            ])
+                    ).sort((a, b) => (a[3] as string).localeCompare(b[3] as string));
                 break;
 
             case 'expiry_report':
@@ -228,12 +227,58 @@ const SpecialReports: React.FC = () => {
                 });
                 break;
 
+            case 'sales_by_company_customer':
+                if (!selectedCompanyId) return { data: [], headers: [], title: 'لطفاً کمپانی را انتخاب کنید' };
+                const targetCompany = companies.find(c => c.id === selectedCompanyId);
+                title = `خلاصه مشتریان کمپانی ${targetCompany?.name || ''}`;
+                headers = ['نام مشتری', 'تعداد کل اقلام', 'مجموع مبلغ (ارز پایه)'];
+                
+                const customerSummary: { [customerId: string]: { name: string, totalQty: number, totalAmount: number } } = {};
+                
+                saleInvoices.forEach(inv => {
+                    if (inv.type !== 'sale') return; // Skip returns for summary
+                    if (startDate && inv.timestamp.split('T')[0] < startDate) return;
+                    if (endDate && inv.timestamp.split('T')[0] > endDate) return;
+                    
+                    const customerName = customers.find(c => c.id === inv.customerId)?.name || 'مشتری گذری';
+                    const customerId = inv.customerId || 'walk-in';
+                    
+                    inv.items.forEach(item => {
+                        if (item.type === 'product' && item.companyId === selectedCompanyId) {
+                            if (!customerSummary[customerId]) {
+                                customerSummary[customerId] = { name: customerName, totalQty: 0, totalAmount: 0 };
+                            }
+                            customerSummary[customerId].totalQty += item.quantity;
+                            
+                            // Calculate amount in base currency
+                            const price = (item.finalPrice !== undefined) ? item.finalPrice : item.salePrice;
+                            const itemTotal = price * item.quantity;
+                            const config = storeSettings.currencyConfigs[inv.currency];
+                            const baseAmount = inv.currency === storeSettings.baseCurrency 
+                                ? itemTotal 
+                                : (config.method === 'multiply' ? itemTotal / inv.exchangeRate : itemTotal * inv.exchangeRate);
+                            
+                            customerSummary[customerId].totalAmount += baseAmount;
+                        }
+                    });
+                });
+                
+                data = Object.values(customerSummary)
+                    .sort((a, b) => b.totalAmount - a.totalAmount)
+                    .map(s => [
+                        s.name,
+                        s.totalQty,
+                        s.totalAmount.toLocaleString()
+                    ]);
+                break;
+
             case 'purchase_history':
                 headers = ['تاریخ', 'شماره فاکتور', 'نام کالا', 'تعداد', 'قیمت خرید', 'جمع کل'];
                 let filteredPurchases = purchaseInvoices;
                 if (startDate) filteredPurchases = filteredPurchases.filter(inv => inv.timestamp.split('T')[0] >= startDate);
                 if (endDate) filteredPurchases = filteredPurchases.filter(inv => inv.timestamp.split('T')[0] <= endDate);
                 if (selectedSupplierId) filteredPurchases = filteredPurchases.filter(inv => inv.supplierId === selectedSupplierId);
+                if (selectedCompanyId) filteredPurchases = filteredPurchases.filter(inv => inv.companyId === selectedCompanyId);
 
                 data = filteredPurchases.flatMap(inv => {
                     return inv.items.map(item => [
@@ -349,18 +394,23 @@ const SpecialReports: React.FC = () => {
                 break;
 
             case 'wastage_report':
-                headers = ['تاریخ', 'نام کالا', 'تعداد', 'ارزش (خرید)', 'علت'];
+                headers = ['تاریخ', 'نام کالا', 'کمپانی', 'تعداد', 'ارزش (خرید)', 'علت'];
                 let filteredWastage = wastageRecords;
                 if (startDate) filteredWastage = filteredWastage.filter(w => w.timestamp.split('T')[0] >= startDate);
                 if (endDate) filteredWastage = filteredWastage.filter(w => w.timestamp.split('T')[0] <= endDate);
+                if (selectedCompanyId) filteredWastage = filteredWastage.filter(w => w.companyId === selectedCompanyId);
                 
-                data = filteredWastage.map(w => [
-                    w.timestamp.split('T')[0],
-                    w.productName,
-                    w.quantity,
-                    w.totalCost.toLocaleString(),
-                    w.reason
-                ]);
+                data = filteredWastage.map(w => {
+                    const company = companies.find(c => c.id === w.companyId)?.name || 'نامشخص';
+                    return [
+                        w.timestamp.split('T')[0],
+                        w.productName,
+                        company,
+                        w.quantity,
+                        w.totalCost.toLocaleString(),
+                        w.reason
+                    ];
+                });
                 break;
 
             default:
@@ -559,7 +609,7 @@ const SpecialReports: React.FC = () => {
                                     />
                                 </div>
 
-                                {selectedReportId.includes('company') || selectedReportId === 'expense_summary' ? (
+                                {selectedReportId.includes('company') || selectedReportId === 'expense_summary' || selectedReportId === 'sales_by_company_customer' || selectedReportId === 'purchase_history' || selectedReportId === 'wastage_report' ? (
                                     <div>
                                         <label className="text-xs font-bold text-slate-400 block mb-1">انتخاب کمپانی</label>
                                         <select 
