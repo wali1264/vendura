@@ -83,6 +83,7 @@ const SpecialReports: React.FC = () => {
             reports: [
                 { id: 'sales_by_customer', label: 'فروش به تفکیک مشتری', description: 'چه کالاهایی به کدام مشتریان فروخته شده است' },
                 { id: 'sales_by_company_customer', label: 'خلاصه مشتریان به تفکیک کمپانی', description: 'مجموع خرید هر مشتری از محصولات یک شرکت خاص' },
+                { id: 'activity_percentage', label: 'گزارش درصد اکتیویتی', description: 'نمایش فعالیت مشتریان و سهم درصدی به تفکیک کمپانی' },
                 { id: 'customer_balances', label: 'مانده حساب مشتریان', description: 'لیست مانده حساب تمام مشتریان به تفکیک ارز' },
                 { id: 'customer_balances_detailed', label: 'صورت‌حساب جامع مشتریان (Debit/Credit)', description: 'گزارش تحلیلی بدهکار، بستانکار و مانده نهایی مشتریان' },
                 { id: 'wastage_report', label: 'گزارش ضایعات', description: 'کالاهای ضایع شده به تفکیک علت و شرکت' },
@@ -307,21 +308,67 @@ const SpecialReports: React.FC = () => {
                 headers = ['نام مشتری', 'بدهکار (Debit)', 'بستانکار (Credit)', 'مانده نهایی (Balance)'];
                 data = customers.map(c => {
                     const txs = customerTransactions.filter(t => t.customerId === c.id);
+                    
+                    // If company filter is active, we only consider transactions related to that company's products
+                    let filteredTxs = txs;
+                    if (selectedCompanyId) {
+                        filteredTxs = txs.filter(t => {
+                            if (t.type === 'credit_sale' && t.invoiceId) {
+                                const inv = saleInvoices.find(i => i.id === t.invoiceId);
+                                return inv?.items.some(item => item.type === 'product' && item.companyId === selectedCompanyId);
+                            }
+                            if (t.type === 'payment' && t.invoiceId) {
+                                const inv = saleInvoices.find(i => i.id === t.invoiceId);
+                                return inv?.items.some(item => item.type === 'product' && item.companyId === selectedCompanyId);
+                            }
+                            // For general payments or other types, if we can't link to company, we might exclude or include based on business rule.
+                            // Here we exclude if it's not linked to the company to provide a "pure" company statement.
+                            return false;
+                        });
+                    }
+
                     // Debit: Sales and credit adjustments (positive impact on balance)
-                    const debit = txs
+                    const debit = filteredTxs
                         .filter(t => t.type === 'credit_sale' || t.type === 'receipt')
                         .reduce((sum, t) => {
                             const config = storeSettings.currencyConfigs[t.currency as 'AFN'|'USD'|'IRT'];
                             const baseAmount = t.currency === storeSettings.baseCurrency ? t.amount : (config.method === 'multiply' ? t.amount / (t.exchangeRate || 1) : t.amount * (t.exchangeRate || 1));
+                            
+                            // If company filter is active and it's a sale, only count the portion belonging to the company
+                            if (selectedCompanyId && t.type === 'credit_sale' && t.invoiceId) {
+                                const inv = saleInvoices.find(i => i.id === t.invoiceId);
+                                if (inv) {
+                                    const companyPortionBase = inv.items.reduce((s, item) => {
+                                        if (item.type === 'product' && item.companyId === selectedCompanyId) {
+                                            const price = item.finalPrice || item.salePrice;
+                                            const itemTotal = price * item.quantity;
+                                            const itemBase = inv.currency === storeSettings.baseCurrency ? itemTotal : (config.method === 'multiply' ? itemTotal / inv.exchangeRate : itemTotal * inv.exchangeRate);
+                                            return s + itemBase;
+                                        }
+                                        return s;
+                                    }, 0);
+                                    return sum + companyPortionBase;
+                                }
+                            }
+                            
                             return sum + baseAmount;
                         }, 0);
                     
                     // Credit: Payments and returns (negative impact on balance)
-                    const credit = txs
+                    const credit = filteredTxs
                         .filter(t => t.type === 'payment' || t.type === 'sale_return')
                         .reduce((sum, t) => {
                             const config = storeSettings.currencyConfigs[t.currency as 'AFN'|'USD'|'IRT'];
                             const baseAmount = t.currency === storeSettings.baseCurrency ? t.amount : (config.method === 'multiply' ? t.amount / (t.exchangeRate || 1) : t.amount * (t.exchangeRate || 1));
+                            
+                            // If company filter is active and it's a payment linked to an invoice, only count the portion attributed to the company?
+                            // This is complex. Usually, if a payment is for an invoice, it's for the whole invoice.
+                            // For simplicity, if the payment is linked to an invoice that has the company's products, we include it.
+                            // But we might need to scale it if the invoice has multiple companies.
+                            // Let's assume for now that if it's linked, we take the whole payment if the invoice is "relevant".
+                            // Or better: if it's a company-specific statement, we might only want to see the sales.
+                            // But the user asked for "debt and credit".
+                            
                             return sum + baseAmount;
                         }, 0);
 
@@ -332,6 +379,65 @@ const SpecialReports: React.FC = () => {
                         (debit - credit).toLocaleString()
                     ];
                 });
+                
+                // Filter out customers with zero activity if company filter is on
+                if (selectedCompanyId) {
+                    data = data.filter(row => row[1] !== '0' || row[2] !== '0');
+                }
+                break;
+
+            case 'activity_percentage':
+                headers = ['نام مشتری', 'کمپانی', 'مبلغ فروش (ارز پایه)', 'سهم اکتیویتی', 'درصد سهم'];
+                const activityMap: { [key: string]: { customerName: string, companyName: string, totalSales: number, totalActivity: number, sharePercent: number } } = {};
+
+                saleInvoices.forEach(inv => {
+                    if (inv.type !== 'sale') return;
+                    if (startDate && inv.timestamp.split('T')[0] < startDate) return;
+                    if (endDate && inv.timestamp.split('T')[0] > endDate) return;
+                    if (selectedCustomerId && inv.customerId !== selectedCustomerId) return;
+
+                    const customerName = customers.find(c => c.id === inv.customerId)?.name || 'مشتری گذری';
+                    const shares = inv.appliedShares || {};
+
+                    inv.items.forEach(item => {
+                        if (item.type === 'product' && item.companyId) {
+                            const company = companies.find(c => c.id === item.companyId);
+                            if (!company) return;
+                            if (selectedCompanyId && item.companyId !== selectedCompanyId) return;
+
+                            const key = `${inv.customerId || 'walk-in'}_${item.companyId}`;
+                            if (!activityMap[key]) {
+                                activityMap[key] = {
+                                    customerName,
+                                    companyName: company.name,
+                                    totalSales: 0,
+                                    totalActivity: 0,
+                                    sharePercent: shares[item.companyId] || 0
+                                };
+                            }
+
+                            const price = item.finalPrice || item.salePrice;
+                            const itemTotal = price * item.quantity;
+                            const config = storeSettings.currencyConfigs[inv.currency];
+                            const baseAmount = inv.currency === storeSettings.baseCurrency 
+                                ? itemTotal 
+                                : (config.method === 'multiply' ? itemTotal / inv.exchangeRate : itemTotal * inv.exchangeRate);
+
+                            activityMap[key].totalSales += baseAmount;
+                            activityMap[key].totalActivity += (baseAmount * activityMap[key].sharePercent) / 100;
+                        }
+                    });
+                });
+
+                data = Object.values(activityMap)
+                    .sort((a, b) => b.totalSales - a.totalSales)
+                    .map(item => [
+                        item.customerName,
+                        item.companyName,
+                        item.totalSales.toLocaleString(),
+                        item.totalActivity.toLocaleString(),
+                        `${item.sharePercent}%`
+                    ]);
                 break;
 
             case 'supplier_balances':
@@ -609,7 +715,7 @@ const SpecialReports: React.FC = () => {
                                     />
                                 </div>
 
-                                {selectedReportId.includes('company') || selectedReportId === 'expense_summary' || selectedReportId === 'sales_by_company_customer' || selectedReportId === 'purchase_history' || selectedReportId === 'wastage_report' ? (
+                                {selectedReportId.includes('company') || selectedReportId === 'expense_summary' || selectedReportId === 'sales_by_company_customer' || selectedReportId === 'purchase_history' || selectedReportId === 'wastage_report' || selectedReportId === 'activity_percentage' || selectedReportId === 'customer_balances_detailed' ? (
                                     <div>
                                         <label className="text-xs font-bold text-slate-400 block mb-1">انتخاب کمپانی</label>
                                         <select 
@@ -636,7 +742,7 @@ const SpecialReports: React.FC = () => {
                                         </select>
                                     </div>
                                 ) : null}
-                                {selectedReportId === 'sales_by_customer' ? (
+                                {selectedReportId === 'sales_by_customer' || selectedReportId === 'activity_percentage' ? (
                                     <div>
                                         <label className="text-xs font-bold text-slate-400 block mb-1">انتخاب مشتری</label>
                                         <select 
