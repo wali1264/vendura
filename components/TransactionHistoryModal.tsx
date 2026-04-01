@@ -44,8 +44,48 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     }, [transactions, dateRange]);
 
-    // Calculate separated balances for Suppliers and Customers
-    const balances = useMemo(() => {
+    // Calculate total balances (independent of date filter)
+    const totalBalances = useMemo(() => {
+        if (type === 'employee') return null;
+        
+        let debtAFN = 0, paidAFN = 0;
+        let debtUSD = 0, paidUSD = 0;
+        let debtIRT = 0, paidIRT = 0;
+
+        transactions.forEach(t => {
+            const currency = (t as any).currency || 'AFN';
+            if (type === 'supplier') {
+                if (t.type === 'purchase' || t.type === 'receipt') {
+                    if (currency === 'USD') debtUSD += t.amount; 
+                    else if (currency === 'IRT') debtIRT += t.amount;
+                    else debtAFN += t.amount;
+                } else if (t.type === 'payment' || t.type === 'purchase_return') {
+                    if (currency === 'USD') paidUSD += t.amount; 
+                    else if (currency === 'IRT') paidIRT += t.amount;
+                    else paidAFN += t.amount;
+                }
+            } else if (type === 'customer') {
+                if (t.type === 'credit_sale' || t.type === 'receipt') {
+                    if (currency === 'USD') debtUSD += t.amount; 
+                    else if (currency === 'IRT') debtIRT += t.amount;
+                    else debtAFN += t.amount;
+                } else if (t.type === 'payment' || t.type === 'sale_return') {
+                    if (currency === 'USD') paidUSD += t.amount; 
+                    else if (currency === 'IRT') paidIRT += t.amount;
+                    else paidAFN += t.amount;
+                }
+            }
+        });
+
+        return {
+            afn: debtAFN - paidAFN,
+            usd: debtUSD - paidUSD,
+            irt: debtIRT - paidIRT
+        };
+    }, [transactions, type]);
+
+    // Calculate filtered balances for the table/report
+    const filteredBalances = useMemo(() => {
         if (type === 'employee') return null;
         
         let debtAFN = 0, paidAFN = 0;
@@ -215,22 +255,22 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
                     <div className="flex flex-shrink-0 justify-between items-center p-5 border-b border-gray-200 bg-slate-50 sticky top-0 z-20">
                         <div className="flex flex-col gap-1">
                             <h2 className="text-xl md:text-2xl font-bold text-slate-800">صورت حساب: {person.name}</h2>
-                            {type !== 'employee' && balances ? (
+                            {type !== 'employee' && totalBalances ? (
                                 <div className="flex gap-2 md:gap-3 mt-1 flex-wrap">
                                     <div className="bg-white border px-3 py-1 rounded-xl shadow-sm flex flex-col items-center">
                                         <span className="text-[10px] font-black text-slate-400 block uppercase">افغانی</span>
-                                        <span dir="ltr" className={`font-black ${balances.afn > 0 ? 'text-red-600' : (balances.afn < 0 ? 'text-green-600' : 'text-slate-400')}`}>{formatBalance(balances.afn)}</span>
-                                        <span className="text-[8px] font-bold opacity-60">{balances.afn > 0 ? 'بدهکاریم' : (balances.afn < 0 ? 'طلبکاریم' : 'تسویه')}</span>
+                                        <span dir="ltr" className={`font-black ${totalBalances.afn > 0 ? 'text-red-600' : (totalBalances.afn < 0 ? 'text-green-600' : 'text-slate-400')}`}>{formatBalance(totalBalances.afn)}</span>
+                                        <span className="text-[8px] font-bold opacity-60">{totalBalances.afn > 0 ? 'بدهکاریم' : (totalBalances.afn < 0 ? 'طلبکاریم' : 'تسویه')}</span>
                                     </div>
                                     <div className="bg-white border px-3 py-1 rounded-xl shadow-sm flex flex-col items-center">
                                         <span className="text-[10px] font-black text-slate-400 block uppercase">دلار</span>
-                                        <span dir="ltr" className={`font-black ${balances.usd > 0 ? 'text-red-600' : (balances.usd < 0 ? 'text-green-600' : 'text-slate-400')}`}>{formatBalance(balances.usd)}</span>
-                                        <span className="text-[8px] font-bold opacity-60">{balances.usd > 0 ? 'بدهکاریم' : (balances.usd < 0 ? 'طلبکاریم' : 'تسویه')}</span>
+                                        <span dir="ltr" className={`font-black ${totalBalances.usd > 0 ? 'text-red-600' : (totalBalances.usd < 0 ? 'text-green-600' : 'text-slate-400')}`}>{formatBalance(totalBalances.usd)}</span>
+                                        <span className="text-[8px] font-bold opacity-60">{totalBalances.usd > 0 ? 'بدهکاریم' : (totalBalances.usd < 0 ? 'طلبکاریم' : 'تسویه')}</span>
                                     </div>
                                     <div className="bg-white border px-3 py-1 rounded-xl shadow-sm flex flex-col items-center">
                                         <span className="text-[10px] font-black text-slate-400 block uppercase">تومان</span>
-                                        <span dir="ltr" className={`font-black ${balances.irt > 0 ? 'text-red-600' : (balances.irt < 0 ? 'text-green-600' : 'text-slate-400')}`}>{formatBalance(balances.irt)}</span>
-                                        <span className="text-[8px] font-bold opacity-60">{balances.irt > 0 ? 'بدهکاریم' : (balances.irt < 0 ? 'طلبکاریم' : 'تسویه')}</span>
+                                        <span dir="ltr" className={`font-black ${totalBalances.irt > 0 ? 'text-red-600' : (totalBalances.irt < 0 ? 'text-green-600' : 'text-slate-400')}`}>{formatBalance(totalBalances.irt)}</span>
+                                        <span className="text-[8px] font-bold opacity-60">{totalBalances.irt > 0 ? 'بدهکاریم' : (totalBalances.irt < 0 ? 'طلبکاریم' : 'تسویه')}</span>
                                     </div>
                                 </div>
                             ) : (
@@ -285,11 +325,11 @@ const TransactionHistoryModal: React.FC<TransactionHistoryModalProps> = ({ perso
                 >
                     {transactionTable}
                      <div className="mt-6 pt-4 border-t text-left font-bold text-xl">
-                        {type !== 'employee' && balances ? (
+                        {type !== 'employee' && filteredBalances ? (
                             <div className="flex flex-col gap-2">
-                                <div>مانده {storeSettings.currencyConfigs['AFN']?.name || 'افغانی'}: <span dir="ltr" className={balances.afn > 0 ? 'text-red-600' : (balances.afn < 0 ? 'text-green-600' : '')}>{formatBalance(balances.afn)} {storeSettings.currencyConfigs['AFN']?.name || 'AFN'}</span> <span className="text-sm opacity-60">{balances.afn > 0 ? '(بدهکاریم)' : (balances.afn < 0 ? '(طلبکاریم)' : '(تسویه)')}</span></div>
-                                <div>مانده {storeSettings.currencyConfigs['USD']?.name || 'دلار'}: <span dir="ltr" className={balances.usd > 0 ? 'text-red-600' : (balances.usd < 0 ? 'text-green-600' : '')}>{formatBalance(balances.usd)} {storeSettings.currencyConfigs['USD']?.name || '$'}</span> <span className="text-sm opacity-60">{balances.usd > 0 ? '(بدهکاریم)' : (balances.usd < 0 ? '(طلبکاریم)' : '(تسویه)')}</span></div>
-                                <div>مانده {storeSettings.currencyConfigs['IRT']?.name || 'تومان'}: <span dir="ltr" className={balances.irt > 0 ? 'text-red-600' : (balances.irt < 0 ? 'text-green-600' : '')}>{formatBalance(balances.irt)} {storeSettings.currencyConfigs['IRT']?.name || 'IRT'}</span> <span className="text-sm opacity-60">{balances.irt > 0 ? '(بدهکاریم)' : (balances.irt < 0 ? '(طلبکاریم)' : '(تسویه)')}</span></div>
+                                <div>مانده {storeSettings.currencyConfigs['AFN']?.name || 'افغانی'}: <span dir="ltr" className={filteredBalances.afn > 0 ? 'text-red-600' : (filteredBalances.afn < 0 ? 'text-green-600' : '')}>{formatBalance(filteredBalances.afn)} {storeSettings.currencyConfigs['AFN']?.name || 'AFN'}</span> <span className="text-sm opacity-60">{filteredBalances.afn > 0 ? '(بدهکاریم)' : (filteredBalances.afn < 0 ? '(طلبکاریم)' : '(تسویه)')}</span></div>
+                                <div>مانده {storeSettings.currencyConfigs['USD']?.name || 'دلار'}: <span dir="ltr" className={filteredBalances.usd > 0 ? 'text-red-600' : (filteredBalances.usd < 0 ? 'text-green-600' : '')}>{formatBalance(filteredBalances.usd)} {storeSettings.currencyConfigs['USD']?.name || '$'}</span> <span className="text-sm opacity-60">{filteredBalances.usd > 0 ? '(بدهکاریم)' : (filteredBalances.usd < 0 ? '(طلبکاریم)' : '(تسویه)')}</span></div>
+                                <div>مانده {storeSettings.currencyConfigs['IRT']?.name || 'تومان'}: <span dir="ltr" className={filteredBalances.irt > 0 ? 'text-red-600' : (filteredBalances.irt < 0 ? 'text-green-600' : '')}>{formatBalance(filteredBalances.irt)} {storeSettings.currencyConfigs['IRT']?.name || 'IRT'}</span> <span className="text-sm opacity-60">{filteredBalances.irt > 0 ? '(بدهکاریم)' : (filteredBalances.irt < 0 ? '(طلبکاریم)' : '(تسویه)')}</span></div>
                             </div>
                         ) : (
                             <>موجودی نهایی: {formatCurrency(person.balance, storeSettings)}</>

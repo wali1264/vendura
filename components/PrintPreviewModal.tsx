@@ -35,9 +35,16 @@ const PrintPreviewModal: React.FC<PrintPreviewModalProps> = ({ invoice, onClose 
             IRT: (customer as Customer).balanceIRT
         };
 
-        if (invoice.currency === 'USD') prev.USD -= (invoice.totalAmount * multiplier);
-        else if (invoice.currency === 'IRT') prev.IRT -= (invoice.totalAmount * multiplier);
-        else prev.AFN -= (invoice.totalAmount * multiplier);
+        if (invoice.currency === 'USD') {
+            prev.USD -= (invoice.totalAmount * multiplier);
+            if (invoice.receivedAmount) prev.USD += (invoice.receivedAmount * multiplier);
+        } else if (invoice.currency === 'IRT') {
+            prev.IRT -= (invoice.totalAmount * multiplier);
+            if (invoice.receivedAmount) prev.IRT += (invoice.receivedAmount * multiplier);
+        } else {
+            prev.AFN -= (invoice.totalAmount * multiplier);
+            if (invoice.receivedAmount) prev.AFN += (invoice.receivedAmount * multiplier);
+        }
 
         return prev;
     }, [customer, invoice]);
