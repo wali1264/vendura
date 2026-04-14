@@ -358,6 +358,18 @@ export interface User {
     roleId: string;
 }
 
+// --- Backup Module Types ---
+export interface BackupRecord {
+    id: string;
+    user_id: string;
+    data?: AppState; // Optional because we might only fetch metadata for the list
+    created_at: string;
+    is_cloud: boolean;
+    is_local: boolean;
+    status: 'success' | 'failed';
+    errorMessage?: string;
+}
+
 export interface AppState {
     products: Product[];
     saleInvoices: SaleInvoice[];

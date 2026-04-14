@@ -4,7 +4,7 @@ import type {
     Product, ProductBatch, SaleInvoice, PurchaseInvoice, InTransitInvoice, Supplier, Customer, 
     Employee, Expense, Role, User, StoreSettings, ActivityLog, 
     CustomerTransaction, SupplierTransaction, PayrollTransaction, AppState, Service,
-    DepositHolder, DepositTransaction, Company, Partner
+    DepositHolder, DepositTransaction, Company, Partner, BackupRecord
 } from '../types';
 
 export interface AdminProfile {
@@ -79,25 +79,78 @@ export const api = {
     },
 
     // --- CLOUD BACKUP ---
-    saveCloudBackup: async (userId: string, appState: any): Promise<boolean> => {
+    saveCloudBackup: async (userId: string, appState: any, isLocal: boolean, isCloud: boolean, status: 'success' | 'failed', errorMessage?: string): Promise<boolean> => {
         try {
-            const { error } = await supabase.from('backups').upsert({
+            // 1. Force delete all previous backups for this user to save space (Free Tier optimization)
+            const { error: deleteError } = await supabase
+                .from('backups')
+                .delete()
+                .eq('user_id', userId);
+
+            if (deleteError) {
+                console.error("Error deleting previous backups:", deleteError);
+                // We continue anyway to try and save the new one, or we could fail here.
+                // Given the user's request for 100% certainty, let's log it.
+            }
+
+            // 2. Insert the new single backup record
+            const { error: insertError } = await supabase.from('backups').insert({
                 user_id: userId,
                 data: appState,
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'user_id' });
-            return !error;
+                is_local: isLocal,
+                is_cloud: isCloud,
+                status: status,
+                error_message: errorMessage,
+                created_at: new Date().toISOString()
+            });
+
+            if (insertError) {
+                console.error("Supabase backup insert error:", insertError);
+                return false;
+            }
+            return true;
         } catch (e) {
+            console.error("Exception in saveCloudBackup:", e);
             return false;
         }
     },
     getCloudBackup: async (userId: string): Promise<any | null> => {
         try {
-            const { data, error } = await supabase.from('backups').select('data').eq('user_id', userId).maybeSingle();
+            const { data, error } = await supabase
+                .from('backups')
+                .select('data')
+                .eq('user_id', userId)
+                .eq('status', 'success')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
             if (error || !data) return null;
             return data.data;
         } catch (e) {
             return null;
+        }
+    },
+    getBackupHistory: async (userId: string): Promise<BackupRecord[]> => {
+        try {
+            const { data, error } = await supabase
+                .from('backups')
+                .select('id, user_id, created_at, is_cloud, is_local, status, error_message')
+                .eq('user_id', userId)
+                .order('created_at', { ascending: false })
+                .limit(1);
+            
+            if (error || !data) return [];
+            return data.map(d => ({
+                id: d.id,
+                user_id: d.user_id,
+                created_at: d.created_at,
+                is_cloud: d.is_cloud,
+                is_local: d.is_local,
+                status: d.status,
+                errorMessage: d.error_message
+            }));
+        } catch (e) {
+            return [];
         }
     },
     

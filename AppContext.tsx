@@ -5,7 +5,7 @@ import type {
     Customer, Supplier, Employee, Expense, Service, StoreSettings, CartItem, Company, Partner, WastageRecord,
     CustomerTransaction, SupplierTransaction, PayrollTransaction, ActivityLog,
     User, Role, Permission, AppState, DepositHolder, DepositTransaction,
-    Order, OrderStatus, OrderPayment
+    Order, OrderStatus, OrderPayment, BackupRecord
 } from './types';
 import { api } from './services/supabaseService';
 import { supabase } from './utils/supabaseClient';
@@ -25,8 +25,9 @@ interface AppContextType extends AppState {
     // Backup & Restore
     exportData: () => void;
     importData: (file: File) => void;
-    cloudBackup: (isSilent?: boolean) => Promise<boolean>;
+    cloudBackup: (isSilent?: boolean, options?: { local?: boolean, cloud?: boolean }) => Promise<boolean>;
     cloudRestore: () => Promise<boolean>;
+    getBackupHistory: () => Promise<BackupRecord[]>;
     autoBackupEnabled: boolean;
     setAutoBackupEnabled: (enabled: boolean) => void;
 
@@ -574,8 +575,20 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         } catch (e) { return { success: false, message: '❌ خطا در ثبت‌نام.' }; }
     };
 
+    const validateData = (data: AppState): boolean => {
+        if (!data) return false;
+        if (!data.storeSettings || !data.storeSettings.storeName) return false;
+        if (!Array.isArray(data.products) || !Array.isArray(data.saleInvoices)) return false;
+        return true;
+    };
+
     const exportData = () => {
-        const dataStr = JSON.stringify({ ...state, isAuthenticated: false, currentUser: null, cart: [] }, null, 2);
+        const backupData = { ...state, isAuthenticated: false, currentUser: null, cart: [] };
+        if (!validateData(backupData as AppState)) {
+            showToast("❌ خطا: داده‌ها معتبر نیستند. پشتیبان‌گیری انجام نشد.");
+            return;
+        }
+        const dataStr = JSON.stringify(backupData, null, 2);
         const blob = new Blob([dataStr], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -590,6 +603,10 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         reader.onload = async (e) => {
             try {
                 const data = JSON.parse(e.target?.result as string) as AppState;
+                if (!validateData(data)) {
+                    showToast("❌ خطا: فایل پشتیبان نامعتبر است.");
+                    return;
+                }
                 await api.clearAndRestoreData(data);
                 await fetchData();
                 showToast("✅ بازیابی با موفقیت انجام شد.");
@@ -598,23 +615,125 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         reader.readAsText(file);
     };
 
-    const cloudBackup = async (isSilent = false) => {
-        if (!navigator.onLine || !state.currentUser) return false;
-        try {
-            const success = await api.saveCloudBackup(state.currentUser.id, { ...state, isAuthenticated: false, currentUser: null, cart: [] });
-            if (success) localStorage.setItem('kasebyar_last_backup', Date.now().toString());
-            return success;
-        } catch (error) { return false; }
-    };
+    const cloudBackup = useCallback(async (isSilent = false, options: { local?: boolean, cloud?: boolean } = { cloud: true }) => {
+        if (!state.currentUser) return false;
+        
+        const backupData = { ...state, isAuthenticated: false, currentUser: null, cart: [] };
+        if (!validateData(backupData as AppState)) {
+            if (!isSilent) showToast("❌ خطا: داده‌های برنامه معتبر نیستند.");
+            return false;
+        }
+
+        let localSuccess = true;
+        let cloudSuccess = true;
+        let errorMessage = '';
+
+        // 1. Local Backup if requested
+        if (options.local) {
+            try {
+                exportData();
+            } catch (e) {
+                localSuccess = false;
+                errorMessage = 'خطا در پشتیبان‌گیری محلی';
+            }
+        }
+
+        // 2. Cloud Backup if requested
+        if (options.cloud) {
+            if (!navigator.onLine) {
+                cloudSuccess = false;
+                errorMessage = 'عدم اتصال به اینترنت برای پشتیبان ابری';
+                localStorage.setItem('kasebyar_pending_cloud_backup', 'true');
+            } else {
+                try {
+                    cloudSuccess = await api.saveCloudBackup(
+                        state.currentUser.id, 
+                        backupData, 
+                        !!options.local, 
+                        true, 
+                        'success'
+                    );
+                    if (cloudSuccess) {
+                        localStorage.removeItem('kasebyar_pending_cloud_backup');
+                    } else {
+                        errorMessage = 'خطا در ذخیره روی سرور';
+                    }
+                } catch (error) {
+                    cloudSuccess = false;
+                    errorMessage = error instanceof Error ? error.message : 'خطای ناشناخته ابری';
+                }
+            }
+        }
+
+        const finalStatus = (options.cloud ? cloudSuccess : true) && (options.local ? localSuccess : true);
+        
+        if (finalStatus) {
+            localStorage.setItem('kasebyar_last_backup', Date.now().toString());
+            if (!isSilent) showToast("✅ پشتیبان‌گیری با موفقیت انجام شد.");
+        } else if (!isSilent) {
+            showToast(`⚠️ ${errorMessage || 'خطا در پشتیبان‌گیری'}`);
+        }
+
+        // Log the attempt to Supabase even if failed (if online)
+        if (navigator.onLine && options.cloud && !cloudSuccess) {
+            api.saveCloudBackup(state.currentUser.id, null, !!options.local, true, 'failed', errorMessage).catch(() => {});
+        }
+
+        return finalStatus;
+    }, [state, exportData, showToast]);
 
     const cloudRestore = async () => {
-        if (!navigator.onLine || !state.currentUser) return false;
+        if (!navigator.onLine || !state.currentUser) {
+            showToast("⚠️ برای بازیابی ابری نیاز به اتصال اینترنت دارید.");
+            return false;
+        }
         try {
             const data = await api.getCloudBackup(state.currentUser.id);
-            if (data) { await api.clearAndRestoreData(data); await fetchData(); return true; }
+            if (data) {
+                if (!validateData(data)) {
+                    showToast("❌ خطا: داده‌های ابری نامعتبر هستند.");
+                    return false;
+                }
+                await api.clearAndRestoreData(data);
+                await fetchData();
+                return true;
+            }
+            showToast("❌ هیچ نسخه پشتیبانی در ابر یافت نشد.");
             return false;
-        } catch (error) { return false; }
+        } catch (error) { 
+            showToast("❌ خطا در بازیابی از ابر.");
+            return false; 
+        }
     };
+
+    const getBackupHistory = async () => {
+        if (!state.currentUser || !navigator.onLine) return [];
+        return api.getBackupHistory(state.currentUser.id);
+    };
+
+    useEffect(() => {
+        if (autoBackupEnabled && state.currentUser && isShopActive) {
+            const lastBackup = localStorage.getItem('kasebyar_last_backup');
+            const now = Date.now();
+            const twentyFourHours = 24 * 60 * 60 * 1000;
+
+            if (!lastBackup || (now - parseInt(lastBackup)) > twentyFourHours) {
+                console.log("Auto-backup triggered (24h passed or first time)");
+                cloudBackup(true, { local: true, cloud: true });
+            }
+        }
+    }, [autoBackupEnabled, state.currentUser, isShopActive, cloudBackup]);
+
+    useEffect(() => {
+        const handleOnline = () => {
+            if (localStorage.getItem('kasebyar_pending_cloud_backup') === 'true') {
+                console.log("Online detected, processing pending cloud backup...");
+                cloudBackup(true, { cloud: true });
+            }
+        };
+        window.addEventListener('online', handleOnline);
+        return () => window.removeEventListener('online', handleOnline);
+    }, [cloudBackup]);
 
     const addProduct = (p: any, b: any) => { 
         api.addProduct(p, b).then(np => { setState(prev => ({ ...prev, products: [...prev.products, np] })); logActivity('inventory', `محصول جدید: ${p.name}`, np.id, 'product'); }); 

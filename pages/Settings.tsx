@@ -1,10 +1,14 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useAppContext } from '../AppContext';
-import type { StoreSettings, Service, Role, User, Permission } from '../types';
-import { PlusIcon, MinusIcon, TrashIcon, DownloadIcon, UploadIcon, UserGroupIcon, KeyIcon, WarningIcon, CheckIcon, SettingsIcon } from '../components/icons';
+import { 
+    PlusIcon, MinusIcon, TrashIcon, DownloadIcon, UploadIcon, 
+    UserGroupIcon, KeyIcon, WarningIcon, CheckIcon, SettingsIcon,
+    HistoryIcon, CheckCircleIcon, XIcon, ChevronDownIcon 
+} from '../components/icons';
 import Toast from '../components/Toast';
 import { formatCurrency, toEnglishDigits } from '../utils/formatters';
 import { ALL_PERMISSIONS, groupPermissions } from '../utils/permissions';
+import type { StoreSettings, Service, Role, User, Permission, BackupRecord } from '../types';
 
 interface TabProps {
     showToast: (message: string) => void;
@@ -408,13 +412,32 @@ const ServicesTab: React.FC<TabProps> = ({ showToast }) => {
 const BackupRestoreTab: React.FC<TabProps> = ({ showToast }) => {
     const { 
         exportData, importData, cloudBackup, cloudRestore, 
-        autoBackupEnabled, setAutoBackupEnabled 
+        getBackupHistory, autoBackupEnabled, setAutoBackupEnabled 
     } = useAppContext();
     
     const [isProcessing, setIsProcessing] = useState(false);
     const [showRestoreConfirm, setShowRestoreConfirm] = useState(false);
+    const [showCloudRestoreConfirm, setShowCloudRestoreConfirm] = useState(false);
     const [pendingFile, setPendingFile] = useState<File | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // History state
+    const [lastBackup, setLastBackup] = useState<BackupRecord | null>(null);
+    const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+    const loadHistory = useCallback(async () => {
+        if (!navigator.onLine) return;
+        setIsLoadingHistory(true);
+        const records = await getBackupHistory();
+        if (records.length > 0) {
+            setLastBackup(records[0]);
+        }
+        setIsLoadingHistory(false);
+    }, [getBackupHistory]);
+
+    useEffect(() => {
+        loadHistory();
+    }, []);
 
     const handleImportClick = () => {
         fileInputRef.current?.click();
@@ -448,14 +471,32 @@ const BackupRestoreTab: React.FC<TabProps> = ({ showToast }) => {
 
     const handleCloudBackup = async () => {
         setIsProcessing(true);
-        await cloudBackup();
+        const success = await cloudBackup(false, { local: true, cloud: true });
+        if (success) loadHistory();
         setIsProcessing(false);
     };
 
     const handleCloudRestore = async () => {
+        if (!navigator.onLine) {
+            showToast("⚠️ برای بازیابی ابری نیاز به اتصال اینترنت دارید.");
+            return;
+        }
+        setShowCloudRestoreConfirm(true);
+    };
+
+    const confirmCloudRestore = async () => {
         setIsProcessing(true);
-        await cloudRestore();
-        setIsProcessing(false);
+        showToast("در حال تهیه نسخه پشتیبان محلی قبل از بازیابی ابری...");
+        exportData(); // Safety backup
+        
+        setTimeout(async () => {
+            const success = await cloudRestore();
+            if (success) {
+                showToast("✅ بازیابی ابری با موفقیت انجام شد.");
+                setShowCloudRestoreConfirm(false);
+            }
+            setIsProcessing(false);
+        }, 1500);
     };
 
     return (
@@ -530,26 +571,63 @@ const BackupRestoreTab: React.FC<TabProps> = ({ showToast }) => {
                 
                 <div className="flex flex-col md:flex-row gap-3">
                     <button 
-                        disabled={true}
-                        className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-slate-300 text-white font-black cursor-not-allowed"
+                        disabled={isProcessing}
+                        onClick={handleCloudBackup}
+                        className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-indigo-600 text-white font-black hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-[0.98] disabled:bg-slate-400"
                     >
-                        ذخیره فوری در ابر (غیرفعال)
+                        {isProcessing ? 'در حال پردازش...' : 'ذخیره فوری در ابر'}
                     </button>
                     <button 
-                        disabled={true}
-                        className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-white border-2 border-slate-200 text-slate-400 font-black cursor-not-allowed"
+                        disabled={isProcessing}
+                        onClick={handleCloudRestore}
+                        className="flex-1 flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-white border-2 border-indigo-200 text-indigo-700 font-black hover:bg-indigo-50 transition-all active:scale-[0.98] disabled:border-slate-200 disabled:text-slate-400"
                     >
-                        بازیابی آخرین نسخه ابری (غیرفعال)
+                        بازیابی آخرین نسخه ابری
                     </button>
                 </div>
 
-                <div className="mt-4 p-3 bg-amber-50 border border-amber-100 rounded-xl">
-                    <p className="text-[11px] font-black text-amber-700 text-center">
-                        ⚠️ این قابلیت به دلیل محدودیت فضای سرور موقتاً غیرفعال است و در آینده نزدیک فعال خواهد شد.
-                    </p>
+                {/* Last Backup Status */}
+                <div className="mt-8">
+                    <div className="flex items-center gap-2 mb-4 text-slate-700">
+                        <HistoryIcon className="w-5 h-5" />
+                        <h4 className="font-black text-sm">وضعیت آخرین پشتیبان‌گیری</h4>
+                    </div>
+                    
+                    <div className="space-y-2">
+                        {lastBackup ? (
+                            <div className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl text-xs">
+                                <div className="flex items-center gap-3">
+                                    {lastBackup.status === 'success' ? (
+                                        <CheckCircleIcon className="w-5 h-5 text-green-500" />
+                                    ) : (
+                                        <XIcon className="w-5 h-5 text-red-500" />
+                                    )}
+                                    <div>
+                                        <p className="font-black text-slate-800">
+                                            {new Date(lastBackup.created_at).toLocaleDateString('fa-IR')} - {new Date(lastBackup.created_at).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}
+                                        </p>
+                                        <p className="text-[10px] text-slate-500 font-bold">
+                                            {lastBackup.is_cloud && '☁️ ابری'} {lastBackup.is_local && '💾 محلی'}
+                                        </p>
+                                    </div>
+                                </div>
+                                {lastBackup.status === 'failed' && (
+                                    <span className="text-[10px] text-red-500 font-black bg-red-50 px-2 py-1 rounded-lg">
+                                        خطا در آخرین تلاش
+                                    </span>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="text-center py-6 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                                <p className="text-[10px] text-slate-400 font-bold">
+                                    {isLoadingHistory ? 'در حال بارگذاری...' : 'هنوز پشتیبان‌گیری انجام نشده است.'}
+                                </p>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                <div className="mt-8 pt-6 border-t border-indigo-100 flex flex-col md:flex-row items-center justify-between gap-4 opacity-50 pointer-events-none">
+                <div className="mt-8 pt-6 border-t border-indigo-100 flex flex-col md:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-4">
                          <div className={`w-14 h-8 rounded-full p-1 cursor-pointer transition-all duration-300 ${autoBackupEnabled ? 'bg-green-500' : 'bg-slate-300'}`} onClick={() => setAutoBackupEnabled(!autoBackupEnabled)}>
                             <div className={`bg-white w-6 h-6 rounded-full shadow-md transition-all duration-300 ${autoBackupEnabled ? 'mr-6' : 'mr-0'}`}></div>
@@ -561,6 +639,41 @@ const BackupRestoreTab: React.FC<TabProps> = ({ showToast }) => {
                     </div>
                 </div>
             </div>
+
+            {showCloudRestoreConfirm && (
+                <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+                        <div className="p-8 text-center">
+                            <div className="w-20 h-20 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                                <UploadIcon className="w-10 h-10" />
+                            </div>
+                            <h3 className="text-2xl font-black text-slate-800 mb-4">بازیابی از ابر</h3>
+                            <p className="text-slate-600 text-sm leading-relaxed mb-8 font-bold">
+                                آیا از بازیابی آخرین نسخه پشتیبان ابری مطمئن هستید؟
+                                <br /><br />
+                                این کار تمام داده‌های فعلی شما را با آخرین نسخه موجود در سرور جایگزین می‌کند.
+                                برای امنیت، یک نسخه پشتیبان محلی از داده‌های فعلی شما ابتدا دانلود خواهد شد.
+                            </p>
+                            <div className="flex flex-col gap-3">
+                                <button 
+                                    disabled={isProcessing}
+                                    onClick={confirmCloudRestore}
+                                    className="w-full py-4 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all active:scale-95 disabled:bg-slate-400"
+                                >
+                                    {isProcessing ? 'در حال بازیابی...' : 'تایید و شروع بازیابی ابری'}
+                                </button>
+                                <button 
+                                    disabled={isProcessing}
+                                    onClick={() => setShowCloudRestoreConfirm(false)}
+                                    className="w-full py-4 bg-slate-100 text-slate-600 font-black rounded-2xl hover:bg-slate-200 transition-colors"
+                                >
+                                    انصراف
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
              <div className="p-4 bg-red-50 border-r-4 border-red-500 rounded-l-2xl flex gap-3">
                 <WarningIcon className="w-6 h-6 text-red-600 shrink-0" />
