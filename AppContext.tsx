@@ -648,10 +648,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
                 try {
                     cloudSuccess = await api.saveCloudBackup(
                         state.currentUser.id, 
-                        backupData, 
-                        !!options.local, 
-                        true, 
-                        'success'
+                        backupData
                     );
                     if (cloudSuccess) {
                         localStorage.removeItem('kasebyar_pending_cloud_backup');
@@ -674,10 +671,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             showToast(`⚠️ ${errorMessage || 'خطا در پشتیبان‌گیری'}`);
         }
 
-        // Log the attempt to Supabase even if failed (if online)
-        if (navigator.onLine && options.cloud && !cloudSuccess) {
-            api.saveCloudBackup(state.currentUser.id, null, !!options.local, true, 'failed', errorMessage).catch(() => {});
-        }
+        // Removed logging of failed attempts to Supabase to avoid schema mismatch errors
 
         return finalStatus;
     }, [state, exportData, showToast]);

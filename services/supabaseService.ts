@@ -79,9 +79,9 @@ export const api = {
     },
 
     // --- CLOUD BACKUP ---
-    saveCloudBackup: async (userId: string, appState: any, isLocal: boolean, isCloud: boolean, status: 'success' | 'failed', errorMessage?: string): Promise<boolean> => {
+    saveCloudBackup: async (userId: string, appState: any): Promise<boolean> => {
         try {
-            // 1. Force delete all previous backups for this user to save space (Free Tier optimization)
+            // 1. Force delete all previous backups for this user to save space
             const { error: deleteError } = await supabase
                 .from('backups')
                 .delete()
@@ -89,19 +89,14 @@ export const api = {
 
             if (deleteError) {
                 console.error("Error deleting previous backups:", deleteError);
-                // We continue anyway to try and save the new one, or we could fail here.
-                // Given the user's request for 100% certainty, let's log it.
             }
 
-            // 2. Insert the new single backup record
+            // 2. Insert the new single backup record using ONLY existing columns in DB
+            // Based on DB schema: id, user_id, data, updated_at
             const { error: insertError } = await supabase.from('backups').insert({
                 user_id: userId,
                 data: appState,
-                is_local: isLocal,
-                is_cloud: isCloud,
-                status: status,
-                error_message: errorMessage,
-                created_at: new Date().toISOString()
+                updated_at: new Date().toISOString()
             });
 
             if (insertError) {
@@ -120,8 +115,7 @@ export const api = {
                 .from('backups')
                 .select('data')
                 .eq('user_id', userId)
-                .eq('status', 'success')
-                .order('created_at', { ascending: false })
+                .order('updated_at', { ascending: false })
                 .limit(1)
                 .maybeSingle();
             if (error || !data) return null;
@@ -134,20 +128,19 @@ export const api = {
         try {
             const { data, error } = await supabase
                 .from('backups')
-                .select('id, user_id, created_at, is_cloud, is_local, status, error_message')
+                .select('id, user_id, updated_at')
                 .eq('user_id', userId)
-                .order('created_at', { ascending: false })
+                .order('updated_at', { ascending: false })
                 .limit(1);
             
             if (error || !data) return [];
             return data.map(d => ({
                 id: d.id,
                 user_id: d.user_id,
-                created_at: d.created_at,
-                is_cloud: d.is_cloud,
-                is_local: d.is_local,
-                status: d.status,
-                errorMessage: d.error_message
+                created_at: d.updated_at, // Map updated_at to created_at for UI compatibility
+                is_cloud: true,
+                is_local: false,
+                status: 'success'
             }));
         } catch (e) {
             return [];
